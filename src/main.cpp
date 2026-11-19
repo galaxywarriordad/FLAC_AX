@@ -1,4 +1,5 @@
-// src/main.cpp — Bare-metal Linux FLAC -> ALSA prototype with ESS DAC & RAM preload hooks
+// src/main.cpp — Bare-metal Linux FLAC -> ALSA prototype with ESS DAC,
+// bit-perfect rate switching, startup watermark, and RAM preload queue support
 #include "ess_dac_hooks.hpp"
 #include "preload_policy.hpp"
 
@@ -30,6 +31,9 @@
 #endif
 
 namespace {
+
+constexpr std::size_t kRingCapacityFrames = 65536;
+constexpr std::size_t kStartupWatermarkFrames = 16384; // ~25% of ring (~341 ms @ 48 kHz)
 
 std::atomic<bool> g_stop_requested{false};
 
@@ -131,7 +135,7 @@ inline std::int32_t SampleToS32(FLAC__int32 sample, unsigned int bps) noexcept {
 
 class FlacStreamDecoder final : public FLAC::Decoder::File {
 public:
-    FlacStreamDecoder(StereoFrameRing<65536>& ring, StreamMeta& meta)
+    FlacStreamDecoder(StereoFrameRing<kRingCapacityFrames>& ring, StreamMeta& meta)
         : ring_(ring), meta_(meta) {}
 
 protected:
@@ -181,7 +185,7 @@ protected:
     }
 
 private:
-    StereoFrameRing<65536>& ring_;
+    StereoFrameRing<kRingCapacityFrames>& ring_;
     StreamMeta& meta_;
     std::vector<std::int32_t> pcm_scratch_;
 };
@@ -289,6 +293,20 @@ bool ConfigureAlsaForEss(snd_pcm_t* pcm,
     return true;
 }
 
+void WaitForStartupWatermark(const StereoFrameRing<kRingCapacityFrames>& ring,
+                             const std::atomic<bool>& decode_finished,
+                             const StreamMeta& meta,
+                             std::size_t target_frames) {
+    while (!g_stop_requested.load(std::memory_order_acquire) &&
+           !meta.eof_or_error.load(std::memory_order_acquire) &&
+           !decode_finished.load(std::memory_order_acquire)) {
+        if (ring.Size() >= target_frames) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
 std::filesystem::path ResolveHardwareProfilesPath(std::string_view cli_path) {
     if (!cli_path.empty()) {
         return std::filesystem::path(cli_path);
@@ -300,7 +318,7 @@ std::filesystem::path ResolveHardwareProfilesPath(std::string_view cli_path) {
 }
 
 void PrintUsage() {
-    std::cerr << "Usage: flac_ax <file.flac> [options]\n"
+    std::cerr << "Usage: flac_ax <file1.flac> [file2.flac ...] [options]\n"
               << "  --ess <es9281ac_pro|es9281pro>   Target ESS DAC chip hook (default: es9281ac_pro)\n"
               << "  --device <alsa_dev>              ALSA PCM device (default: chip default)\n"
               << "  --period <frames>                ALSA period frames (default: chip default 96)\n"
@@ -315,7 +333,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::string flac_path;
+    std::vector<std::string> queue;
     std::string ess_arg = "es9281ac_pro";
     std::string device_override;
     std::string profiles_arg;
@@ -333,15 +351,15 @@ int main(int argc, char** argv) {
             has_period_override = true;
         } else if (arg == "--profiles" && i + 1 < argc) {
             profiles_arg = argv[++i];
-        } else if (!arg.empty() && arg.front() != '-' && flac_path.empty()) {
-            flac_path = std::string(arg);
+        } else if (!arg.empty() && arg.front() != '-') {
+            queue.emplace_back(arg);
         } else {
             PrintUsage();
             return 1;
         }
     }
 
-    if (flac_path.empty()) {
+    if (queue.empty()) {
         PrintUsage();
         return 1;
     }
@@ -374,127 +392,154 @@ int main(int argc, char** argv) {
 
     const auto preload_policy = flac_ax::DetectHostPreloadPolicy();
     flac_ax::RamFilePreloader preloader(preload_policy);
-    std::vector<std::string> queue{flac_path};
-    preloader.RefreshWindow(queue, 0);
     std::cout << "[PRELOAD] MemTotal=" << (preload_policy.detected_mem_total_bytes / (1024ULL * 1024ULL))
               << " MiB, mode="
               << (preload_policy.mode == flac_ax::PreloadMode::WholeAlbum ? "WholeAlbum" :
                   (preload_policy.mode == flac_ax::PreloadMode::Window3Files ? "Window3Files" : "SingleFile"))
-              << ", cached=" << preloader.CachedFileCount() << "\n";
-
-    StereoFrameRing<65536> ring;
-    StreamMeta meta;
-    std::atomic<bool> decode_finished{false};
-
-    std::thread decoder_thread([&]() {
-        ApplyThreadAffinityAndPriority(5, 0);
-
-        FlacStreamDecoder decoder(ring, meta);
-        const FLAC__StreamDecoderInitStatus init_status = decoder.init(flac_path);
-        if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
-            std::cerr << "[FLAC] Failed to initialize decoder for '" << flac_path << "' (status="
-                      << FLAC__StreamDecoderInitStatusString[init_status] << ")\n";
-            meta.eof_or_error.store(true, std::memory_order_release);
-            decode_finished.store(true, std::memory_order_release);
-            return;
-        }
-
-        decoder.process_until_end_of_stream();
-        decoder.finish();
-        decode_finished.store(true, std::memory_order_release);
-    });
-
-    while (!meta.meta_ready.load(std::memory_order_acquire) &&
-           !meta.eof_or_error.load(std::memory_order_acquire) &&
-           !g_stop_requested.load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-
-    if (meta.eof_or_error.load(std::memory_order_acquire) ||
-        g_stop_requested.load(std::memory_order_acquire)) {
-        g_stop_requested.store(true, std::memory_order_release);
-        decoder_thread.join();
-        return 1;
-    }
-
-    const unsigned int stream_rate = meta.sample_rate.load(std::memory_order_acquire);
-    const unsigned int bps = meta.bits_per_sample.load(std::memory_order_acquire);
-    const unsigned int channels = meta.channels.load(std::memory_order_acquire);
-    std::cout << "[FLAC] Stream: " << stream_rate << " Hz, " << bps << "-bit, " << channels << " ch\n";
+              << ", tracks=" << queue.size() << "\n";
 
     snd_pcm_t* pcm = nullptr;
     int open_err = snd_pcm_open(&pcm, device.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
     if (open_err < 0) {
         std::cerr << "[ALSA] Failed to open '" << device << "': " << snd_strerror(open_err) << "\n";
-        g_stop_requested.store(true, std::memory_order_release);
-        decoder_thread.join();
         return 1;
     }
 
-    unsigned int actual_rate = 0;
-    snd_pcm_uframes_t actual_period = 0;
-    if (!ConfigureAlsaForEss(pcm, chip, stream_rate, period_frames, actual_rate, actual_period)) {
-        snd_pcm_close(pcm);
-        g_stop_requested.store(true, std::memory_order_release);
-        decoder_thread.join();
-        return 1;
-    }
-
-    ApplyThreadAffinityAndPriority(0, 80);
-
-    std::vector<std::int32_t> out_buffer(actual_period * 2, 0);
+    unsigned int active_rate = 0;
+    snd_pcm_uframes_t active_period = 0;
+    std::vector<std::int32_t> out_buffer;
     std::uint64_t xruns = 0;
     std::uint64_t total_frames_written = 0;
+    bool rt_pinned = false;
 
-    while (!g_stop_requested.load(std::memory_order_acquire)) {
-        const std::size_t avail = ring.Size();
-        if (avail == 0) {
-            if (decode_finished.load(std::memory_order_acquire)) {
-                break;
+    for (std::size_t track_idx = 0; track_idx < queue.size() && !g_stop_requested.load(std::memory_order_acquire);
+         ++track_idx) {
+        const std::string& flac_path = queue[track_idx];
+        preloader.RefreshWindow(queue, track_idx);
+        std::cout << "[QUEUE] Track " << (track_idx + 1) << "/" << queue.size()
+                  << ": " << flac_path
+                  << " (cached_files=" << preloader.CachedFileCount() << ")\n";
+
+        StereoFrameRing<kRingCapacityFrames> ring;
+        StreamMeta meta;
+        std::atomic<bool> decode_finished{false};
+
+        std::thread decoder_thread([&]() {
+            ApplyThreadAffinityAndPriority(5, 0);
+
+            FlacStreamDecoder decoder(ring, meta);
+            const FLAC__StreamDecoderInitStatus init_status = decoder.init(flac_path);
+            if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
+                std::cerr << "[FLAC] Failed to initialize decoder for '" << flac_path << "' (status="
+                          << FLAC__StreamDecoderInitStatusString[init_status] << ")\n";
+                meta.eof_or_error.store(true, std::memory_order_release);
+                decode_finished.store(true, std::memory_order_release);
+                return;
             }
-            std::this_thread::sleep_for(std::chrono::microseconds(250));
-            continue;
+
+            decoder.process_until_end_of_stream();
+            decoder.finish();
+            decode_finished.store(true, std::memory_order_release);
+        });
+
+        while (!meta.meta_ready.load(std::memory_order_acquire) &&
+               !meta.eof_or_error.load(std::memory_order_acquire) &&
+               !g_stop_requested.load(std::memory_order_acquire)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
-        const std::size_t to_write = std::min<std::size_t>(avail, static_cast<std::size_t>(actual_period));
-        const std::size_t popped = ring.Pop(out_buffer.data(), to_write);
-        if (popped == 0) {
-            continue;
+        if (meta.eof_or_error.load(std::memory_order_acquire) ||
+            g_stop_requested.load(std::memory_order_acquire)) {
+            g_stop_requested.store(true, std::memory_order_release);
+            decoder_thread.join();
+            snd_pcm_close(pcm);
+            return 1;
         }
 
-        std::size_t frame_offset = 0;
-        while (frame_offset < popped && !g_stop_requested.load(std::memory_order_acquire)) {
-            const snd_pcm_sframes_t written =
-                snd_pcm_writei(pcm, out_buffer.data() + frame_offset * 2, popped - frame_offset);
-            if (written >= 0) {
-                frame_offset += static_cast<std::size_t>(written);
-                total_frames_written += static_cast<std::size_t>(written);
-            } else if (written == -EAGAIN) {
-                snd_pcm_wait(pcm, 10);
-            } else if (written == -EPIPE) {
-                ++xruns;
-                const int rec_err = snd_pcm_recover(pcm, static_cast<int>(written), 1);
-                if (rec_err < 0) {
-                    std::cerr << "[ALSA] Failed to recover from EPIPE: " << snd_strerror(rec_err) << "\n";
+        const unsigned int stream_rate = meta.sample_rate.load(std::memory_order_acquire);
+        const unsigned int bps = meta.bits_per_sample.load(std::memory_order_acquire);
+        const unsigned int channels = meta.channels.load(std::memory_order_acquire);
+        const unsigned int target_rate = flac_ax::ess::NegotiateEssRate(chip, stream_rate);
+
+        std::cout << "[FLAC] Stream: " << stream_rate << " Hz, " << bps << "-bit, " << channels << " ch\n";
+
+        // Wait for initial pre-buffer watermark before starting/re-locking ALSA output
+        WaitForStartupWatermark(ring, decode_finished, meta, kStartupWatermarkFrames);
+
+        if (target_rate != active_rate || active_period == 0) {
+            if (active_rate != 0) {
+                std::cout << "[ESS] Sample rate changed (" << active_rate << " Hz -> "
+                          << target_rate << " Hz), draining & reconfiguring ALSA\n";
+                snd_pcm_drain(pcm);
+            }
+
+            unsigned int actual_rate = 0;
+            snd_pcm_uframes_t actual_period = 0;
+            if (!ConfigureAlsaForEss(pcm, chip, stream_rate, period_frames, actual_rate, actual_period)) {
+                g_stop_requested.store(true, std::memory_order_release);
+                decoder_thread.join();
+                snd_pcm_close(pcm);
+                return 1;
+            }
+            active_rate = actual_rate;
+            active_period = actual_period;
+            out_buffer.assign(active_period * 2, 0);
+        }
+
+        if (!rt_pinned) {
+            ApplyThreadAffinityAndPriority(0, 80);
+            rt_pinned = true;
+        }
+
+        while (!g_stop_requested.load(std::memory_order_acquire)) {
+            const std::size_t avail = ring.Size();
+            if (avail == 0) {
+                if (decode_finished.load(std::memory_order_acquire)) {
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::microseconds(250));
+                continue;
+            }
+
+            const std::size_t to_write = std::min<std::size_t>(avail, static_cast<std::size_t>(active_period));
+            const std::size_t popped = ring.Pop(out_buffer.data(), to_write);
+            if (popped == 0) {
+                continue;
+            }
+
+            std::size_t frame_offset = 0;
+            while (frame_offset < popped && !g_stop_requested.load(std::memory_order_acquire)) {
+                const snd_pcm_sframes_t written =
+                    snd_pcm_writei(pcm, out_buffer.data() + frame_offset * 2, popped - frame_offset);
+                if (written >= 0) {
+                    frame_offset += static_cast<std::size_t>(written);
+                    total_frames_written += static_cast<std::size_t>(written);
+                } else if (written == -EAGAIN) {
+                    snd_pcm_wait(pcm, 10);
+                } else if (written == -EPIPE) {
+                    ++xruns;
+                    const int rec_err = snd_pcm_recover(pcm, static_cast<int>(written), 1);
+                    if (rec_err < 0) {
+                        std::cerr << "[ALSA] Failed to recover from EPIPE: " << snd_strerror(rec_err) << "\n";
+                        g_stop_requested.store(true, std::memory_order_release);
+                        break;
+                    }
+                } else {
+                    std::cerr << "[ALSA] snd_pcm_writei error: " << snd_strerror(static_cast<int>(written)) << "\n";
                     g_stop_requested.store(true, std::memory_order_release);
                     break;
                 }
-            } else {
-                std::cerr << "[ALSA] snd_pcm_writei error: " << snd_strerror(static_cast<int>(written)) << "\n";
-                g_stop_requested.store(true, std::memory_order_release);
-                break;
             }
         }
+
+        decoder_thread.join();
     }
 
     snd_pcm_drain(pcm);
     snd_pcm_close(pcm);
 
-    g_stop_requested.store(true, std::memory_order_release);
-    decoder_thread.join();
-
     std::cout << "[DONE] Chip=" << chip.chip_name
               << ", frames=" << total_frames_written
-              << ", rate=" << actual_rate << " Hz, xruns=" << xruns << "\n";
+              << ", last_rate=" << active_rate << " Hz, xruns=" << xruns << "\n";
     return 0;
 }
