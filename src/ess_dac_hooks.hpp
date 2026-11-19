@@ -4,21 +4,20 @@
 #include <alsa/asoundlib.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <optional>
-#include <regex>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace flac_ax::ess {
 
 enum class EssChipFamily {
     Unknown,
-    Es9281AcPro, // HiBy FC3 / USB-C mobile Sabre class
-    Es9281Pro    // Sabre Pro family variant
+    Es9281AcPro,
+    Es9281Pro
 };
 
 struct EssChipProfile {
@@ -79,7 +78,6 @@ inline EssChipProfile MakeEssProfile(EssChipFamily family) noexcept {
     }
 }
 
-// Resolves ESS chip hook from a CLI/config string (e.g. "es9281ac_pro", "es9281pro", "fc3").
 inline std::optional<EssChipProfile> ResolveEssChipHook(std::string_view spec) noexcept {
     std::string lower(spec);
     std::transform(lower.begin(), lower.end(), lower.begin(),
@@ -94,7 +92,6 @@ inline std::optional<EssChipProfile> ResolveEssChipHook(std::string_view spec) n
     return std::nullopt;
 }
 
-// Clamps or selects a target sample rate within the ESS chip's supported PCM range.
 inline unsigned int NegotiateEssRate(const EssChipProfile& chip, unsigned int stream_rate_hz) noexcept {
     if (stream_rate_hz == 0U) {
         return chip.preferred_rate_hz;
@@ -102,7 +99,6 @@ inline unsigned int NegotiateEssRate(const EssChipProfile& chip, unsigned int st
     return std::clamp(stream_rate_hz, chip.min_rate_hz, chip.max_rate_hz);
 }
 
-// Hook called right after snd_pcm_hw_params is applied to verify format/rate lock.
 inline bool OnEssHardwareConfigured(const EssChipProfile& chip,
                                   snd_pcm_t* pcm,
                                   unsigned int actual_rate_hz,
@@ -111,12 +107,10 @@ inline bool OnEssHardwareConfigured(const EssChipProfile& chip,
     if (!pcm || actual_rate_hz == 0U || actual_period_frames == 0U) {
         return false;
     }
-    // Keep snd_pcm_prepare() clean and ready for S32_LE playback.
     return snd_pcm_state(pcm) == SND_PCM_STATE_PREPARED ||
            snd_pcm_state(pcm) == SND_PCM_STATE_RUNNING;
 }
 
-// Lightweight cross-check against ax-sdk/config/hardware_profiles.json (schema_version 2.1).
 inline ProfileMatrixCheck CrossCheckHardwareProfiles(
     const std::filesystem::path& profiles_path,
     std::string_view cpu_model_hint = "i5-9600K") {
