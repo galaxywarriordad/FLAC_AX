@@ -1,5 +1,5 @@
-// src/main.cpp — Bare-metal Linux FLAC -> ALSA prototype with ESS DAC,
-// bit-perfect rate switching, startup watermark, and RAM preload queue support
+// src/main.cpp — Bare-metal Linux FLAC -> ALSA engine with ESS DAC hooks,
+// zero-disk FLAC::Decoder::Stream playback, RT memory locking, and rate-lock
 #include "ess_dac_hooks.hpp"
 #include "preload_policy.hpp"
 
@@ -8,6 +8,7 @@
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
+#include <sys/mman.h>
 
 #include <algorithm>
 #include <array>
@@ -18,6 +19,7 @@
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -34,6 +36,7 @@ namespace {
 
 constexpr std::size_t kRingCapacityFrames = 65536;
 constexpr std::size_t kStartupWatermarkFrames = 16384; // ~25% of ring (~341 ms @ 48 kHz)
+constexpr std::size_t kXrunRecoveryFrames = 4096;      // Safe refill floor after EPIPE
 
 std::atomic<bool> g_stop_requested{false};
 
@@ -44,6 +47,13 @@ void HandleSignal(int /*sig*/) noexcept {
 template <std::size_t CapacityFrames>
 class StereoFrameRing {
 public:
+    void Reset() noexcept {
+#if !defined(FLAC_AX_HAVE_AX_AUDIO_HPP)
+        head_.store(0, std::memory_order_relaxed);
+        tail_.store(0, std::memory_order_relaxed);
+#endif
+    }
+
 #if defined(FLAC_AX_HAVE_AX_AUDIO_HPP)
     bool Push(const std::int32_t* interleaved_lr, std::size_t frames) noexcept {
         return ax_ring_.PushBatch(interleaved_lr, frames);
@@ -133,12 +143,76 @@ inline std::int32_t SampleToS32(FLAC__int32 sample, unsigned int bps) noexcept {
     return static_cast<std::int32_t>(static_cast<std::uint32_t>(sample) << shift);
 }
 
-class FlacStreamDecoder final : public FLAC::Decoder::File {
+// Decodes directly from preloaded RAM bytes when available, or falls back to disk streaming.
+class FlacMemoryOrFileDecoder final : public FLAC::Decoder::File {
 public:
-    FlacStreamDecoder(StereoFrameRing<kRingCapacityFrames>& ring, StreamMeta& meta)
-        : ring_(ring), meta_(meta) {}
+    FlacMemoryOrFileDecoder(StereoFrameRing<kRingCapacityFrames>& ring,
+                            StreamMeta& meta,
+                            const std::vector<std::uint8_t>* preloaded_bytes)
+        : ring_(ring), meta_(meta), mem_bytes_(preloaded_bytes) {}
+
+    ::FLAC__StreamDecoderInitStatus InitStream(const std::string& fallback_path) {
+        if (mem_bytes_ != nullptr && !mem_bytes_->empty()) {
+            mem_offset_ = 0;
+            return FLAC::Decoder::Stream::init();
+        }
+        return FLAC::Decoder::File::init(fallback_path);
+    }
 
 protected:
+    ::FLAC__StreamDecoderReadStatus read_callback(FLAC__byte buffer[], std::size_t* bytes) override {
+        if (mem_bytes_ == nullptr) {
+            return FLAC::Decoder::File::read_callback(buffer, bytes);
+        }
+        if (*bytes == 0) {
+            return FLAC__STREAM_DECODER_READ_STATUS_ABORT;
+        }
+        if (mem_offset_ >= mem_bytes_->size()) {
+            *bytes = 0;
+            return FLAC__STREAM_DECODER_READ_STATUS_END_OF_STREAM;
+        }
+        const std::size_t remaining = mem_bytes_->size() - mem_offset_;
+        const std::size_t to_copy = std::min(*bytes, remaining);
+        std::memcpy(buffer, mem_bytes_->data() + mem_offset_, to_copy);
+        mem_offset_ += to_copy;
+        *bytes = to_copy;
+        return FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
+    }
+
+    ::FLAC__StreamDecoderSeekStatus seek_callback(FLAC__uint64 absolute_byte_offset) override {
+        if (mem_bytes_ == nullptr) {
+            return FLAC::Decoder::File::seek_callback(absolute_byte_offset);
+        }
+        if (absolute_byte_offset > mem_bytes_->size()) {
+            return FLAC__STREAM_DECODER_SEEK_STATUS_ERROR;
+        }
+        mem_offset_ = static_cast<std::size_t>(absolute_byte_offset);
+        return FLAC__STREAM_DECODER_SEEK_STATUS_OK;
+    }
+
+    ::FLAC__StreamDecoderTellStatus tell_callback(FLAC__uint64* absolute_byte_offset) override {
+        if (mem_bytes_ == nullptr) {
+            return FLAC::Decoder::File::tell_callback(absolute_byte_offset);
+        }
+        *absolute_byte_offset = static_cast<FLAC__uint64>(mem_offset_);
+        return FLAC__STREAM_DECODER_TELL_STATUS_OK;
+    }
+
+    ::FLAC__StreamDecoderLengthStatus length_callback(FLAC__uint64* stream_length) override {
+        if (mem_bytes_ == nullptr) {
+            return FLAC::Decoder::File::length_callback(stream_length);
+        }
+        *stream_length = static_cast<FLAC__uint64>(mem_bytes_->size());
+        return FLAC__STREAM_DECODER_LENGTH_STATUS_OK;
+    }
+
+    bool eof_callback() override {
+        if (mem_bytes_ == nullptr) {
+            return FLAC::Decoder::File::eof_callback();
+        }
+        return mem_offset_ >= mem_bytes_->size();
+    }
+
     void on_metadata(const ::FLAC__StreamMetadata* metadata) override {
         if (metadata->type == ::FLAC__METADATA_TYPE_STREAMINFO) {
             meta_.sample_rate.store(metadata->data.stream_info.sample_rate, std::memory_order_release);
@@ -187,10 +261,12 @@ protected:
 private:
     StereoFrameRing<kRingCapacityFrames>& ring_;
     StreamMeta& meta_;
+    const std::vector<std::uint8_t>* mem_bytes_{nullptr};
+    std::size_t mem_offset_{0};
     std::vector<std::int32_t> pcm_scratch_;
 };
 
-void ApplyThreadAffinityAndPriority(int cpu_id, int sched_fifo_prio) noexcept {
+void ApplyThreadAffinityAndPriority(int cpu_id, int sched_fifo_prio, bool warn_on_rt_fail = true) noexcept {
     if (cpu_id >= 0) {
         cpu_set_t set;
         CPU_ZERO(&set);
@@ -200,13 +276,25 @@ void ApplyThreadAffinityAndPriority(int cpu_id, int sched_fifo_prio) noexcept {
         }
     }
 
+    sched_param param{};
     if (sched_fifo_prio > 0) {
-        sched_param param{};
         param.sched_priority = sched_fifo_prio;
-        if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0) {
+        if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &param) != 0 && warn_on_rt_fail) {
             std::cerr << "[WARN] Failed to set SCHED_FIFO priority " << sched_fifo_prio
                       << " (check CAP_SYS_NICE / ulimit)\n";
         }
+    } else {
+        param.sched_priority = 0;
+        pthread_setschedparam(pthread_self(), SCHED_OTHER, &param);
+    }
+}
+
+void LockRtRegion(const void* addr, std::size_t len, const char* label) noexcept {
+    if (addr == nullptr || len == 0) {
+        return;
+    }
+    if (mlock(addr, len) != 0) {
+        std::cerr << "[WARN] mlock(" << label << ", " << len << " B) skipped (check RLIMIT_MEMLOCK)\n";
     }
 }
 
@@ -222,6 +310,13 @@ bool ConfigureAlsaForEss(snd_pcm_t* pcm,
     int err = snd_pcm_hw_params_any(pcm, params);
     if (err < 0) {
         std::cerr << "[ALSA] snd_pcm_hw_params_any failed: " << snd_strerror(err) << "\n";
+        return false;
+    }
+
+    // Enforce bit-perfect hardware clocking (never engage ALSA software resampling)
+    err = snd_pcm_hw_params_set_rate_resample(pcm, params, 0);
+    if (err < 0) {
+        std::cerr << "[ALSA] snd_pcm_hw_params_set_rate_resample(0) failed: " << snd_strerror(err) << "\n";
         return false;
     }
 
@@ -405,30 +500,45 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    auto ring = std::make_unique<StereoFrameRing<kRingCapacityFrames>>();
+    LockRtRegion(ring.get(), sizeof(StereoFrameRing<kRingCapacityFrames>), "StereoFrameRing");
+
     unsigned int active_rate = 0;
     snd_pcm_uframes_t active_period = 0;
     std::vector<std::int32_t> out_buffer;
     std::uint64_t xruns = 0;
     std::uint64_t total_frames_written = 0;
-    bool rt_pinned = false;
+    bool rt_warned = false;
 
     for (std::size_t track_idx = 0; track_idx < queue.size() && !g_stop_requested.load(std::memory_order_acquire);
          ++track_idx) {
+        // Ensure non-RT housekeeping (preloader, console I/O, thread spawn) runs under SCHED_OTHER
+        ApplyThreadAffinityAndPriority(0, 0, false);
+    for (std::size_t track_idx = 0; track_idx < queue.size() && !g_stop_requested.load(std::memory_order_acquire);
+         ++track_idx) {
+        // Ensure non-RT housekeeping (preloader, console I/O, thread spawn) runs under SCHED_OTHER
+        ApplyThreadAffinityAndPriority(0, 0, false);
+
         const std::string& flac_path = queue[track_idx];
         preloader.RefreshWindow(queue, track_idx);
+        const auto* cached_entry = preloader.Find(flac_path);
+        const std::vector<std::uint8_t>* preloaded_bytes =
+            (cached_entry != nullptr) ? &cached_entry->bytes : nullptr;
+
         std::cout << "[QUEUE] Track " << (track_idx + 1) << "/" << queue.size()
                   << ": " << flac_path
-                  << " (cached_files=" << preloader.CachedFileCount() << ")\n";
+                  << " (source=" << (preloaded_bytes ? "RAM" : "disk")
+                  << ", cached_files=" << preloader.CachedFileCount() << ")\n";
 
-        StereoFrameRing<kRingCapacityFrames> ring;
+        ring->Reset();
         StreamMeta meta;
         std::atomic<bool> decode_finished{false};
 
         std::thread decoder_thread([&]() {
-            ApplyThreadAffinityAndPriority(5, 0);
+            ApplyThreadAffinityAndPriority(5, 0, false);
 
-            FlacStreamDecoder decoder(ring, meta);
-            const FLAC__StreamDecoderInitStatus init_status = decoder.init(flac_path);
+            FlacMemoryOrFileDecoder decoder(*ring, meta, preloaded_bytes);
+            const FLAC__StreamDecoderInitStatus init_status = decoder.InitStream(flac_path);
             if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
                 std::cerr << "[FLAC] Failed to initialize decoder for '" << flac_path << "' (status="
                           << FLAC__StreamDecoderInitStatusString[init_status] << ")\n";
@@ -464,7 +574,7 @@ int main(int argc, char** argv) {
         std::cout << "[FLAC] Stream: " << stream_rate << " Hz, " << bps << "-bit, " << channels << " ch\n";
 
         // Wait for initial pre-buffer watermark before starting/re-locking ALSA output
-        WaitForStartupWatermark(ring, decode_finished, meta, kStartupWatermarkFrames);
+        WaitForStartupWatermark(*ring, decode_finished, meta, kStartupWatermarkFrames);
 
         if (target_rate != active_rate || active_period == 0) {
             if (active_rate != 0) {
@@ -484,15 +594,14 @@ int main(int argc, char** argv) {
             active_rate = actual_rate;
             active_period = actual_period;
             out_buffer.assign(active_period * 2, 0);
+            LockRtRegion(out_buffer.data(), out_buffer.size() * sizeof(std::int32_t), "out_buffer");
         }
 
-        if (!rt_pinned) {
-            ApplyThreadAffinityAndPriority(0, 80);
-            rt_pinned = true;
-        }
+        ApplyThreadAffinityAndPriority(0, 80, !rt_warned);
+        rt_warned = true;
 
         while (!g_stop_requested.load(std::memory_order_acquire)) {
-            const std::size_t avail = ring.Size();
+            const std::size_t avail = ring->Size();
             if (avail == 0) {
                 if (decode_finished.load(std::memory_order_acquire)) {
                     break;
@@ -502,7 +611,7 @@ int main(int argc, char** argv) {
             }
 
             const std::size_t to_write = std::min<std::size_t>(avail, static_cast<std::size_t>(active_period));
-            const std::size_t popped = ring.Pop(out_buffer.data(), to_write);
+            const std::size_t popped = ring->Pop(out_buffer.data(), to_write);
             if (popped == 0) {
                 continue;
             }
@@ -524,6 +633,8 @@ int main(int argc, char** argv) {
                         g_stop_requested.store(true, std::memory_order_release);
                         break;
                     }
+                    // Allow the ring buffer to build back up before resuming writes
+                    WaitForStartupWatermark(*ring, decode_finished, meta, kXrunRecoveryFrames);
                 } else {
                     std::cerr << "[ALSA] snd_pcm_writei error: " << snd_strerror(static_cast<int>(written)) << "\n";
                     g_stop_requested.store(true, std::memory_order_release);
@@ -535,6 +646,7 @@ int main(int argc, char** argv) {
         decoder_thread.join();
     }
 
+    ApplyThreadAffinityAndPriority(0, 0, false);
     snd_pcm_drain(pcm);
     snd_pcm_close(pcm);
 
