@@ -157,3 +157,12 @@ The `FLAC_AX` runtime decouples non-deterministic storage and decoding work from
 #### Step 5 (Sprint 6) — Shared DAC Arbitration & Piccolo Buildroot Packaging
 * **Task:** Add `/run/lock/ax-dac.lock` (`flock()`) and `SIGUSR1` release hooks so `FLAC_AX` cleanly drains and closes `hw:CARD=FC3,DEV=0` when `Cemu-Latte-AX` or `Eden-Espresso-Wave-AX` launches, and package `flac-ax` inside `Piccolo-AX/batocera-ax-external/package/flac-ax/`.
 * **Verification:** Launching and exiting an emulator while `FLAC_AX` is active yields and reclaims the HiBy FC3 DAC without `-EBUSY` errors.
+
+### Sprint 7 — Blue-Sky Pro-Audio & ESS Sabre Silicon R&D
+
+* **Objective:** Leverage native hardware capabilities of the ESS Sabre (`ES9281AC Pro` / `ES9281PRO`) silicon inside the HiBy FC3 without compromising bit-exact PCM integrity or deterministic `2:3:1` thread isolation.
+* **Key Deliverables:**
+  * **Native DoP (DSD-over-PCM) & DSD128/DSD256 Passthrough Pipeline:** Add a `.dsf` / `.dff` container reader alongside `FlacStreamDecoder` that packs raw 1-bit DSD frames into 24-bit DoP (`0x05` / `0xFA` marker bytes) inside the existing `S32_LE` `StereoFrameRing<65536>` transport, locking the ES9281AC Pro to `176.4 kHz` (DSD64) or `352.8 kHz` (DSD128) with zero decimation or PCM conversion.
+  * **Zero-Attenuation Hardware Volume & ESS Reconstruction Filter Control:** Bind directly to the HiBy FC3's USB Audio Class 2.0 Feature Unit (`snd_mixer_*`) and vendor HID controls in `ess_dac_hooks.hpp` to adjust gain inside the ES9281AC Pro's internal 32-bit HyperStream digital attenuator—keeping the host integer stream at `0 dBFS` bit-exact—while exposing hardware reconstruction filter selection (Linear Phase Fast/Slow, Minimum Phase Fast/Slow, Apodizing).
+  * **Asynchronous USB Clock Sync & ALSA `htimestamp` Jitter Telemetry:** Instrument the Core 0 `SCHED_FIFO` writer loop with `snd_pcm_status_get_htstamp()` and `snd_pcm_delay()` to track period-to-period wake jitter (`us`) and USB isochronous rate-feedback drift, exporting lock-free counters to `ax-sdk` to verify zero clock perturbation under concurrent `Cemu-Latte-AX` GPU/PCIe load.
+* **Verification:** DSD64/DSD128 tracks lock natively on `hw:CARD=FC3,DEV=0` via DoP, hardware volume and filter changes apply without altering host PCM bits, and Core 0 jitter telemetry remains flat under full emulator load.
