@@ -1,4 +1,7 @@
-// src/main.cpp — Bare-metal Linux FLAC -> ALSA (hw:CARD=FC3,DEV=0) prototype
+// src/main.cpp — Bare-metal Linux FLAC -> ALSA prototype with ESS DAC & RAM preload hooks
+#include "ess_dac_hooks.hpp"
+#include "preload_policy.hpp"
+
 #include <FLAC++/decoder.h>
 #include <alsa/asoundlib.h>
 #include <pthread.h>
@@ -10,9 +13,12 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -20,10 +26,6 @@
 #if __has_include(<ax/audio.hpp>)
 #include <ax/audio.hpp>
 #define FLAC_AX_HAVE_AX_AUDIO_HPP 1
-#endif
-#if __has_include(<ax/topology.hpp>)
-#include <ax/topology.hpp>
-#define FLAC_AX_HAVE_AX_TOPOLOGY_HPP 1
 #endif
 #endif
 
@@ -35,9 +37,6 @@ void HandleSignal(int /*sig*/) noexcept {
     g_stop_requested.store(true, std::memory_order_release);
 }
 
-// 64-byte cache-line-aligned SPSC stereo frame ring buffer (interleaved S32_LE L/R).
-// Uses ax::audio::LockFreeStereoRing when available in ax-sdk, with a standalone
-// fallback so standalone builds compile with zero external assumptions.
 template <std::size_t CapacityFrames>
 class StereoFrameRing {
 public:
@@ -207,7 +206,12 @@ void ApplyThreadAffinityAndPriority(int cpu_id, int sched_fifo_prio) noexcept {
     }
 }
 
-bool ConfigureAlsaDevice(snd_pcm_t* pcm, unsigned int requested_rate, snd_pcm_uframes_t period_frames) {
+bool ConfigureAlsaForEss(snd_pcm_t* pcm,
+                         const flac_ax::ess::EssChipProfile& chip,
+                         unsigned int stream_rate_hz,
+                         snd_pcm_uframes_t period_frames,
+                         unsigned int& out_actual_rate,
+                         snd_pcm_uframes_t& out_actual_period) {
     snd_pcm_hw_params_t* params = nullptr;
     snd_pcm_hw_params_alloca(&params);
 
@@ -223,7 +227,7 @@ bool ConfigureAlsaDevice(snd_pcm_t* pcm, unsigned int requested_rate, snd_pcm_uf
         return false;
     }
 
-    err = snd_pcm_hw_params_set_format(pcm, params, SND_PCM_FORMAT_S32_LE);
+    err = snd_pcm_hw_params_set_format(pcm, params, chip.preferred_format);
     if (err < 0) {
         std::cerr << "[ALSA] snd_pcm_hw_params_set_format(S32_LE) failed: " << snd_strerror(err) << "\n";
         return false;
@@ -235,15 +239,13 @@ bool ConfigureAlsaDevice(snd_pcm_t* pcm, unsigned int requested_rate, snd_pcm_uf
         return false;
     }
 
-    unsigned int rate = requested_rate;
+    const unsigned int negotiated = flac_ax::ess::NegotiateEssRate(chip, stream_rate_hz);
+    unsigned int rate = negotiated;
     int dir = 0;
     err = snd_pcm_hw_params_set_rate_near(pcm, params, &rate, &dir);
     if (err < 0) {
         std::cerr << "[ALSA] snd_pcm_hw_params_set_rate_near failed: " << snd_strerror(err) << "\n";
         return false;
-    }
-    if (rate != requested_rate) {
-        std::cout << "[ALSA] Requested " << requested_rate << " Hz, hardware settled at " << rate << " Hz\n";
     }
 
     snd_pcm_uframes_t period = period_frames;
@@ -272,39 +274,119 @@ bool ConfigureAlsaDevice(snd_pcm_t* pcm, unsigned int requested_rate, snd_pcm_uf
         return false;
     }
 
-    std::cout << "[ALSA] Configured rate=" << rate << " Hz, period=" << period
-              << " frames, buffer=" << buffer << " frames (S32_LE stereo)\n";
+    out_actual_rate = rate;
+    out_actual_period = period;
+
+    if (!flac_ax::ess::OnEssHardwareConfigured(chip, pcm, out_actual_rate, out_actual_period)) {
+        std::cerr << "[ESS] Hardware state verification failed for " << chip.chip_name << "\n";
+        return false;
+    }
+
+    std::cout << "[ESS] Chip=" << chip.chip_name
+              << " rate=" << out_actual_rate << " Hz (stream=" << stream_rate_hz << " Hz)"
+              << ", period=" << out_actual_period
+              << " frames, buffer=" << buffer << " frames\n";
     return true;
+}
+
+std::filesystem::path ResolveHardwareProfilesPath(std::string_view cli_path) {
+    if (!cli_path.empty()) {
+        return std::filesystem::path(cli_path);
+    }
+    if (const char* env_dir = std::getenv("AX_SDK_DIR"); env_dir && *env_dir) {
+        return std::filesystem::path(env_dir) / "config" / "hardware_profiles.json";
+    }
+    return std::filesystem::path("../ax-sdk/config/hardware_profiles.json");
+}
+
+void PrintUsage() {
+    std::cerr << "Usage: flac_ax <file.flac> [options]\n"
+              << "  --ess <es9281ac_pro|es9281pro>   Target ESS DAC chip hook (default: es9281ac_pro)\n"
+              << "  --device <alsa_dev>              ALSA PCM device (default: chip default)\n"
+              << "  --period <frames>                ALSA period frames (default: chip default 96)\n"
+              << "  --profiles <path/to/json>        Cross-check ax-sdk hardware_profiles.json\n";
 }
 
 } // namespace
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::cerr << "Usage: flac_ax <file.flac> [alsa_device=hw:CARD=FC3,DEV=0] [period_frames=96]\n";
+        PrintUsage();
+        return 1;
+    }
+
+    std::string flac_path;
+    std::string ess_arg = "es9281ac_pro";
+    std::string device_override;
+    std::string profiles_arg;
+    bool has_period_override = false;
+    snd_pcm_uframes_t period_frames = 96U;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string_view arg = argv[i];
+        if (arg == "--ess" && i + 1 < argc) {
+            ess_arg = argv[++i];
+        } else if (arg == "--device" && i + 1 < argc) {
+            device_override = argv[++i];
+        } else if (arg == "--period" && i + 1 < argc) {
+            period_frames = static_cast<snd_pcm_uframes_t>(std::stoul(argv[++i]));
+            has_period_override = true;
+        } else if (arg == "--profiles" && i + 1 < argc) {
+            profiles_arg = argv[++i];
+        } else if (!arg.empty() && arg.front() != '-' && flac_path.empty()) {
+            flac_path = std::string(arg);
+        } else {
+            PrintUsage();
+            return 1;
+        }
+    }
+
+    if (flac_path.empty()) {
+        PrintUsage();
         return 1;
     }
 
     std::signal(SIGINT, HandleSignal);
     std::signal(SIGTERM, HandleSignal);
 
-    const std::string flac_path = argv[1];
-    const std::string device = (argc >= 3) ? argv[2] : "hw:CARD=FC3,DEV=0";
-    const snd_pcm_uframes_t period_frames =
-        (argc >= 4) ? static_cast<snd_pcm_uframes_t>(std::stoul(argv[3])) : 96U;
+    const auto resolved_ess = flac_ax::ess::ResolveEssChipHook(ess_arg);
+    if (!resolved_ess.has_value()) {
+        std::cerr << "[ESS] Unrecognized ESS chip spec '" << ess_arg
+                  << "'. Use 'es9281ac_pro' or 'es9281pro'.\n";
+        return 1;
+    }
+    const flac_ax::ess::EssChipProfile chip = *resolved_ess;
+    const std::string device =
+        !device_override.empty() ? device_override : std::string(chip.default_alsa_device);
+    if (!has_period_override) {
+        period_frames = chip.default_period_frames;
+    }
 
-#if defined(FLAC_AX_HAVE_AX_AUDIO_HPP)
-    std::cout << "[AX] Using ax::audio::LockFreeStereoRing\n";
-#else
-    std::cout << "[AX] Using built-in 64B-aligned SPSC stereo ring fallback\n";
-#endif
+    const auto profiles_path = ResolveHardwareProfilesPath(profiles_arg);
+    const auto matrix = flac_ax::ess::CrossCheckHardwareProfiles(profiles_path);
+    if (matrix.file_found) {
+        std::cout << "[AX-SDK] Cross-checked " << profiles_path.string()
+                  << " (v2.1=" << (matrix.has_v21_schema ? "yes" : "no")
+                  << ", output_device=auto=" << (matrix.common_audio_device_auto ? "yes" : "no")
+                  << ", cpu_match=" << (matrix.matched_cpu_profile.empty() ? "none" : matrix.matched_cpu_profile)
+                  << ")\n";
+    }
+
+    const auto preload_policy = flac_ax::DetectHostPreloadPolicy();
+    flac_ax::RamFilePreloader preloader(preload_policy);
+    std::vector<std::string> queue{flac_path};
+    preloader.RefreshWindow(queue, 0);
+    std::cout << "[PRELOAD] MemTotal=" << (preload_policy.detected_mem_total_bytes / (1024ULL * 1024ULL))
+              << " MiB, mode="
+              << (preload_policy.mode == flac_ax::PreloadMode::WholeAlbum ? "WholeAlbum" :
+                  (preload_policy.mode == flac_ax::PreloadMode::Window3Files ? "Window3Files" : "SingleFile"))
+              << ", cached=" << preloader.CachedFileCount() << "\n";
 
     StereoFrameRing<65536> ring;
     StreamMeta meta;
     std::atomic<bool> decode_finished{false};
 
     std::thread decoder_thread([&]() {
-        // Pin non-real-time FLAC file I/O and frame decoding to Core 5 (0x20 quarantine)
         ApplyThreadAffinityAndPriority(5, 0);
 
         FlacStreamDecoder decoder(ring, meta);
@@ -335,10 +417,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const unsigned int sample_rate = meta.sample_rate.load(std::memory_order_acquire);
+    const unsigned int stream_rate = meta.sample_rate.load(std::memory_order_acquire);
     const unsigned int bps = meta.bits_per_sample.load(std::memory_order_acquire);
     const unsigned int channels = meta.channels.load(std::memory_order_acquire);
-    std::cout << "[FLAC] Stream: " << sample_rate << " Hz, " << bps << "-bit, " << channels << " ch\n";
+    std::cout << "[FLAC] Stream: " << stream_rate << " Hz, " << bps << "-bit, " << channels << " ch\n";
 
     snd_pcm_t* pcm = nullptr;
     int open_err = snd_pcm_open(&pcm, device.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
@@ -349,17 +431,18 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    if (!ConfigureAlsaDevice(pcm, sample_rate, period_frames)) {
+    unsigned int actual_rate = 0;
+    snd_pcm_uframes_t actual_period = 0;
+    if (!ConfigureAlsaForEss(pcm, chip, stream_rate, period_frames, actual_rate, actual_period)) {
         snd_pcm_close(pcm);
         g_stop_requested.store(true, std::memory_order_release);
         decoder_thread.join();
         return 1;
     }
 
-    // Pin real-time ALSA output thread to Core 0 (0x01) with SCHED_FIFO
     ApplyThreadAffinityAndPriority(0, 80);
 
-    std::vector<std::int32_t> out_buffer(period_frames * 2, 0);
+    std::vector<std::int32_t> out_buffer(actual_period * 2, 0);
     std::uint64_t xruns = 0;
     std::uint64_t total_frames_written = 0;
 
@@ -373,7 +456,7 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        const std::size_t to_write = std::min<std::size_t>(avail, period_frames);
+        const std::size_t to_write = std::min<std::size_t>(avail, static_cast<std::size_t>(actual_period));
         const std::size_t popped = ring.Pop(out_buffer.data(), to_write);
         if (popped == 0) {
             continue;
@@ -410,7 +493,8 @@ int main(int argc, char** argv) {
     g_stop_requested.store(true, std::memory_order_release);
     decoder_thread.join();
 
-    std::cout << "[DONE] Frames written=" << total_frames_written
-              << ", rate=" << sample_rate << " Hz, xruns=" << xruns << "\n";
+    std::cout << "[DONE] Chip=" << chip.chip_name
+              << ", frames=" << total_frames_written
+              << ", rate=" << actual_rate << " Hz, xruns=" << xruns << "\n";
     return 0;
 }
