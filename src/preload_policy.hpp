@@ -1,6 +1,7 @@
 // src/preload_policy.hpp — Host RAM detection and preload window policy for FLAC_AX
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -204,3 +205,4 @@ private:
 };
 
 } // namespace flac_ax
+```
