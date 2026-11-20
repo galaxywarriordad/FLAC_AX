@@ -536,6 +536,10 @@ bool ConfigureAlsaForEss(snd_pcm_t* pcm,
 
     err = snd_pcm_prepare(pcm);
     if (err < 0) {
+        std::cerr << "[ALSA] snd_pcm_prepare failed: " << snd_strerror(err) << "\n";
+        return false;
+    }
+
     out_actual_rate = rate;
     out_actual_period = period;
 
