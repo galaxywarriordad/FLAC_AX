@@ -32,6 +32,11 @@
 #include <ax/audio.hpp>
 #define FLAC_AX_HAVE_AX_AUDIO_HPP 1
 #endif
+#if __has_include(<ax/config.hpp>) && __has_include(<ax/telemetry.hpp>)
+#include <ax/config.hpp>
+#include <ax/telemetry.hpp>
+#define FLAC_AX_HAVE_AX_TELEMETRY_HPP 1
+#endif
 #endif
 
 namespace {
@@ -531,10 +536,6 @@ bool ConfigureAlsaForEss(snd_pcm_t* pcm,
 
     err = snd_pcm_prepare(pcm);
     if (err < 0) {
-        std::cerr << "[ALSA] snd_pcm_prepare failed: " << snd_strerror(err) << "\n";
-        return false;
-    }
-
     out_actual_rate = rate;
     out_actual_period = period;
 
@@ -643,6 +644,21 @@ int main(int argc, char** argv) {
         period_frames = chip.default_period_frames;
     }
 
+#if defined(FLAC_AX_HAVE_AX_TELEMETRY_HPP)
+    ax::EngineConfig ax_cfg{};
+    if (ax::LoadEngineConfig("ax_engine.ini", ax_cfg)) {
+        if (!has_period_override && ax_cfg.alsa_period_frames > 0U) {
+            period_frames = static_cast<snd_pcm_uframes_t>(ax_cfg.alsa_period_frames);
+        }
+    }
+    if (ax_cfg.enable_shared_memory_export) {
+        if (ax::InitTelemetryShm()) {
+            std::cout << "[AX-SDK] Shared-memory telemetry active (/dev/shm/ax_telemetry)\n";
+        }
+    }
+    ax::ResetTelemetry();
+#endif
+
     const auto profiles_path = ResolveHardwareProfilesPath(profiles_arg);
     const auto matrix = flac_ax::ess::CrossCheckHardwareProfiles(profiles_path);
     if (matrix.file_found) {
@@ -665,6 +681,9 @@ int main(int argc, char** argv) {
     int open_err = snd_pcm_open(&pcm, device.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
     if (open_err < 0) {
         std::cerr << "[ALSA] Failed to open '" << device << "': " << snd_strerror(open_err) << "\n";
+#if defined(FLAC_AX_HAVE_AX_TELEMETRY_HPP)
+        ax::ShutdownTelemetryShm();
+#endif
         return 1;
     }
 
@@ -748,8 +767,7 @@ int main(int argc, char** argv) {
             active_rate = actual_rate;
             active_period = actual_period;
             out_buffer.assign(active_period * 2, 0);
-        }
-
+}
         // Promote output thread to SCHED_FIFO 80 on Core 0 (zero stdio/allocations inside loop)
         ApplyThreadAffinityAndPriority(matrix.audio_irq_core, 80, !rt_warned);
         rt_warned = true;
@@ -763,6 +781,10 @@ int main(int argc, char** argv) {
                 std::this_thread::sleep_for(std::chrono::microseconds(150));
                 continue;
             }
+
+#if defined(FLAC_AX_HAVE_AX_TELEMETRY_HPP)
+            const auto cb_start = std::chrono::steady_clock::now();
+#endif
 
             const std::size_t to_write = std::min<std::size_t>(avail, static_cast<std::size_t>(active_period));
             const std::size_t popped = ring->Pop(out_buffer.data(), to_write);
@@ -781,6 +803,9 @@ int main(int argc, char** argv) {
                     snd_pcm_wait(pcm, 5);
                 } else if (written == -EPIPE) {
                     ++xruns;
+#if defined(FLAC_AX_HAVE_AX_TELEMETRY_HPP)
+                    ax::GetTelemetry().audio_underruns.fetch_add(1, std::memory_order_relaxed);
+#endif
                     const int rec_err = snd_pcm_recover(pcm, static_cast<int>(written), 1);
                     if (rec_err < 0) {
                         last_alsa_err = rec_err;
@@ -794,6 +819,15 @@ int main(int argc, char** argv) {
                     break;
                 }
             }
+
+#if defined(FLAC_AX_HAVE_AX_TELEMETRY_HPP)
+            const auto cb_end = std::chrono::steady_clock::now();
+            const auto cb_us = static_cast<std::uint32_t>(
+                std::chrono::duration_cast<std::chrono::microseconds>(cb_end - cb_start).count()
+            );
+            ax::GetTelemetry().audio_buffer_switches.fetch_add(1, std::memory_order_relaxed);
+            ax::RecordAudioCallbackMetrics(cb_us, static_cast<std::uint32_t>(ring->Size()));
+#endif
         }
 
         decoder_worker.WaitTrackFinished();
@@ -819,8 +853,21 @@ int main(int argc, char** argv) {
         snd_pcm_close(pcm);
     }
 
+#if defined(FLAC_AX_HAVE_AX_TELEMETRY_HPP)
+    const auto snap = ax::GetTelemetrySnapshot();
+    std::cout << "[DONE] Chip=" << chip.chip_name
+              << ", frames=" << total_frames_written
+              << ", last_rate=" << active_rate << " Hz, xruns=" << xruns
+              << ", jitter_us(min/p99/max)=" << snap.audio_jitter_min_us
+              << "/" << snap.audio_jitter_p99_us
+              << "/" << snap.audio_jitter_max_us
+              << ", ring_low_water=" << snap.audio_ring_low_water_frames << "\n";
+    ax::ShutdownTelemetryShm();
+#else
     std::cout << "[DONE] Chip=" << chip.chip_name
               << ", frames=" << total_frames_written
               << ", last_rate=" << active_rate << " Hz, xruns=" << xruns << "\n";
+#endif
     return exit_code;
 }
+
