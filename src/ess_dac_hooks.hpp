@@ -30,6 +30,7 @@ struct EssChipProfile {
     snd_pcm_format_t preferred_format{SND_PCM_FORMAT_S32_LE};
     snd_pcm_uframes_t default_period_frames{96};
     snd_pcm_uframes_t fallback_period_frames{128};
+    unsigned int default_buffer_periods{4};
     bool supports_dop_dsd{true};
     bool prefers_direct_hw_rate{true};
 };
@@ -39,7 +40,8 @@ struct ProfileMatrixCheck {
     bool has_v21_schema{false};
     bool common_audio_device_auto{false};
     std::string matched_cpu_profile;
-    std::string audio_irq_mask{"0x01"};
+    int audio_irq_core{0};
+    int storage_aux_core{5};
 };
 
 inline EssChipProfile MakeEssProfile(EssChipFamily family) noexcept {
@@ -55,6 +57,7 @@ inline EssChipProfile MakeEssProfile(EssChipFamily family) noexcept {
                 .preferred_format = SND_PCM_FORMAT_S32_LE,
                 .default_period_frames = 96,
                 .fallback_period_frames = 128,
+                .default_buffer_periods = 4,
                 .supports_dop_dsd = true,
                 .prefers_direct_hw_rate = true,
             };
@@ -69,6 +72,7 @@ inline EssChipProfile MakeEssProfile(EssChipFamily family) noexcept {
                 .preferred_format = SND_PCM_FORMAT_S32_LE,
                 .default_period_frames = 96,
                 .fallback_period_frames = 128,
+                .default_buffer_periods = 4,
                 .supports_dop_dsd = true,
                 .prefers_direct_hw_rate = true,
             };
@@ -99,6 +103,20 @@ inline unsigned int NegotiateEssRate(const EssChipProfile& chip, unsigned int st
     return std::clamp(stream_rate_hz, chip.min_rate_hz, chip.max_rate_hz);
 }
 
+// Scales buffer periods for ultra-high sample rates (192 kHz+) so hardware buffer duration
+// doesn't shrink below ~2 ms and risk USB bus jitter underruns.
+inline unsigned int RecommendedBufferPeriods(const EssChipProfile& chip,
+                                             unsigned int rate_hz,
+                                             unsigned int user_override = 0) noexcept {
+    if (user_override > 0) {
+        return user_override;
+    }
+    if (rate_hz >= 176400U) {
+        return std::max(chip.default_buffer_periods, 8U);
+    }
+    return chip.default_buffer_periods;
+}
+
 inline bool OnEssHardwareConfigured(const EssChipProfile& chip,
                                   snd_pcm_t* pcm,
                                   unsigned int actual_rate_hz,
@@ -107,8 +125,8 @@ inline bool OnEssHardwareConfigured(const EssChipProfile& chip,
     if (!pcm || actual_rate_hz == 0U || actual_period_frames == 0U) {
         return false;
     }
-    return snd_pcm_state(pcm) == SND_PCM_STATE_PREPARED ||
-           snd_pcm_state(pcm) == SND_PCM_STATE_RUNNING;
+    const snd_pcm_state_t st = snd_pcm_state(pcm);
+    return st == SND_PCM_STATE_PREPARED || st == SND_PCM_STATE_RUNNING;
 }
 
 inline ProfileMatrixCheck CrossCheckHardwareProfiles(
