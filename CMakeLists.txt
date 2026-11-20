@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_35_1c)" OFF)
+option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_36)" OFF)
 option(FLAC_AX_NATIVE_ARCH "Optimize for host CPU (-march=native) on bare-metal target" OFF)
 option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (IPO/LTO) in Release builds" ON)
 
