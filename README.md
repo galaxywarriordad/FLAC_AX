@@ -28,7 +28,7 @@ cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-### Enable `ax-sdk` (`v1_35_1c`) via `FetchContent`
+### Enable `ax-sdk` (`v1_36`) via `FetchContent`
 
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFLAC_AX_USE_AX_SDK=ON
@@ -40,6 +40,19 @@ cmake --build build
 ```bash
 ./build/flac_ax /path/to/track.flac hw:CARD=FC3,DEV=0
 ```
+---
+
+## 🔗 The Silicon Preservation Society — Official Repository Network
+
+*(See `REPO_TOPOLOGY.md` for the full cross-host dependency diagram and the **Policy-in-SDK / Adapter-in-Consumer** boundary contract.)*
+
+| Project | Role | Canonical Repository | Base / Upstream |
+| :--- | :--- | :--- | :--- |
+| **`ax-sdk`** | Shared C++20 Runtime Core (`libax_core`) | [GitHub (`ax-sdk`)](https://github.com/galaxywarriordad/ax-sdk) | Dependency-Free C++20 Core |
+| **Eden Espresso Wave `[AX]`** | Nintendo Switch (Windows 10/11 PGO + Linux) | [Eden Forgejo (`Eden-Espresso-Wave-AX`)](https://git.eden-emu.dev/galaxywarriordad/Eden-Espresso-Wave-AX.git) | Upstream: [Eden](https://git.eden-emu.dev/eden-emu/eden/) |
+| **Piccolo `[AX]`** | `< 300 MB` Bare-Metal Linux Console OS | [GitHub (`Piccolo-AX`)](https://github.com/galaxywarriordad/Piccolo-AX) | Base: [Batocera Linux](https://github.com/batocera-linux/batocera.linux) |
+| **Cemu Latte `[AX]`** | Nintendo Wii U (Win10/11 PGO + Batocera `[AX]`) | [GitHub (`Cemu-Latte-AX`)](https://github.com/galaxywarriordad/Cemu-Latte-AX) | Upstream: [Cemu](https://github.com/cemu-project/Cemu) |
+| **`FLAC_AX`** | Bare-Metal Linux ESS Sabre Audio Appliance | [GitHub (`FLAC_AX`)](https://github.com/galaxywarriordad/FLAC-AX) | Standalone `libFLAC++` + ALSA |
 
 ## License
 
