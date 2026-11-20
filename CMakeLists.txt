@@ -40,7 +40,7 @@ if(FLAC_AX_USE_AX_SDK)
     FetchContent_Declare(
         ax_sdk
         GIT_REPOSITORY https://github.com/galaxywarriordad/ax-sdk.git
-        GIT_TAG        v1_35_1c
+        GIT_TAG        v1_36_1
         GIT_SHALLOW    TRUE
     )
     FetchContent_MakeAvailable(ax_sdk)
