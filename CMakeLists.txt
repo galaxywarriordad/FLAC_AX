@@ -28,8 +28,22 @@ if(FLAC_AX_USE_AX_SDK)
     FetchContent_MakeAvailable(ax_sdk)
 endif()
 
+set(FLAC_AX_DSD_HEADERS
+    src/dsd_dop_reader.hpp
+)
+
+set(FLAC_AX_DSP_STUDIO_HEADERS
+    src/dsp/full_feature_synth.hpp
+    src/dsp/stereo_reverb_dsp.hpp
+    src/dsp/tape_delay_dsp.hpp
+    src/midi/mpk_mini3_oled.hpp
+)
+
 # --- 1. Headless Bit-Perfect ESS Sabre FLAC Player ---
-add_executable(flac_ax src/main.cpp)
+add_executable(flac_ax
+    src/main.cpp
+    ${FLAC_AX_DSD_HEADERS}
+)
 target_include_directories(flac_ax PRIVATE src)
 
 target_compile_options(flac_ax PRIVATE
@@ -58,6 +72,7 @@ if(FLAC_AX_BUILD_AV_STUDIO)
         src/midi/mpk_mini3.cpp
         src/dsp/avx2_synth.cpp
         src/visual/av_hud.cpp
+        ${FLAC_AX_DSP_STUDIO_HEADERS}
     )
 
     target_include_directories(ax_av_studio PRIVATE src)
