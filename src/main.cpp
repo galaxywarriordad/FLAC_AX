@@ -995,6 +995,4 @@ int main(int argc, char** argv) {
 #endif
     return exit_code;
 }
-```[cite: 21, 22, 33, 34]
 
-Would you also like the full updated `src/studio_main.cpp` next so `ax_av_studio` uses `EssHardwareMixer` (for example, binding hardware DAC attenuation to `K8` or `--volume`) and checks `/run/lock/ax-dac.lock` cleanly[cite: 21, 22, 31, 33]?
