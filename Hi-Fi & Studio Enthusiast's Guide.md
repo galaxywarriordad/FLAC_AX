@@ -7,7 +7,7 @@
 Unlike boutique streamers or rack-mounted studio gear that lock you into expensive proprietary ecosystems, `FLAC_AX` and `AX AV Studio` run on approachable, proven hardware:
 
 * **🖥️ A Multi-Core `x86_64` PC (6 Cores Recommended):** A classic desktop processor such as an Intel Core `i5-9600K` or `i5-8600K` with `16–32 GB` of RAM running Linux (`Piccolo [AX]` real-time kernel or standard desktop Linux).
-* **🔌 HiBy FC3 Portable USB DAC (ESS Sabre `ES9281AC Pro`):** A pocket-sized, £60 audiophile digital-to-analog converter that unlocks native `384 kHz / 32-bit` PCM and `DSD64 / DSD128` playback straight into your headphones, studio monitors, or hi-fi amplifier.
+* **🔌 HiBy FC3 Portable USB DAC (ESS Sabre `ES9281AC Pro`):** A pocket-sized, £35-40 audiophile digital-to-analog converter that unlocks native `384 kHz / 32-bit` PCM and `DSD64 / DSD128` playback straight into your headphones, studio monitors, or hi-fi amplifier.
 * **🎹 Optional USB MIDI Controller (Akai MPK Mini MK3):** Needed only if you want to play, patch, and sculpt sounds live in `AX AV Studio`—completely optional if you are using `flac_ax` purely as a hi-fi music transport.
 * **📺 Standard HDMI / DisplayPort Monitor:** Optional for headless hi-fi playback, or used to display the 60 FPS studio oscilloscope and 64-band FFT spectrum analyzer.
 
