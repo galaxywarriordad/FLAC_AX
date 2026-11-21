@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_36_1)" ON)
 option(FLAC_AX_BUILD_AV_STUDIO "Build ax_av_studio (MPK Mini MK3 + AVX2 Synth + A/V HUD)" ON)
+option(FLAC_AX_BUILD_VIDEO_UPSCALER "Build single-stream 720p/1080p/2K DVD & V4L2 retro upscaler (ax_video_upscaler)" ON)
 option(FLAC_AX_NATIVE_ARCH "Optimize for host CPU (-march=native) on bare-metal target" OFF)
 option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (IPO/LTO) in Release builds" ON)
 
@@ -38,7 +39,12 @@ set(FLAC_AX_DSP_STUDIO_HEADERS
     src/dsp/tape_delay_dsp.hpp
     src/midi/mpk_mini3_oled.hpp
 )
-
+set(FLAC_AX_VIDEO_HEADERS
+    src/video/ax_720p_hw_gate.hpp
+    src/video/v4l2_live_capture.hpp
+    src/video/upscale_720p_shader.hpp
+    src/video/av_pts_sync.hpp
+)
 # --- 1. Headless Bit-Perfect ESS Sabre FLAC Player ---
 add_executable(flac_ax
     src/main.cpp
@@ -95,7 +101,30 @@ if(FLAC_AX_BUILD_AV_STUDIO)
         target_compile_definitions(ax_av_studio PRIVATE FLAC_AX_HAS_AX_SDK=1)
     endif()
 endif()
+# --- 3. Single-Stream 720p/1080p/2K DVD & V4L2 Retro Upscaler ---
+if(FLAC_AX_BUILD_VIDEO_UPSCALER)
+    add_executable(ax_video_upscaler
+        src/video_upscaler_main.cpp
+        ${FLAC_AX_VIDEO_HEADERS}
+    )
 
+    target_include_directories(ax_video_upscaler PRIVATE src)
+
+    target_compile_options(ax_video_upscaler PRIVATE
+        $<$<CONFIG:Release>:-O3 -DNDEBUG -fomit-frame-pointer>$<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_NATIVE_ARCH}>>:-march=native>
+        -Wall -Wextra -Wpedantic
+    )
+
+    target_link_libraries(ax_video_upscaler PRIVATE
+        PkgConfig::ALSA
+        pthread
+    )
+
+    if(FLAC_AX_USE_AX_SDK)
+        target_link_libraries(ax_video_upscaler PRIVATE ax::core)
+        target_compile_definitions(ax_video_upscaler PRIVATE FLAC_AX_HAS_AX_SDK=1)
+    endif()
+endif()
 if(FLAC_AX_ENABLE_LTO)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
@@ -103,6 +132,9 @@ if(FLAC_AX_ENABLE_LTO)
         set_property(TARGET flac_ax PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
         if(TARGET ax_av_studio)
             set_property(TARGET ax_av_studio PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        endif()
+        if(TARGET ax_video_upscaler)
+            set_property(TARGET ax_video_upscaler PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
         endif()
     endif()
 endif()
