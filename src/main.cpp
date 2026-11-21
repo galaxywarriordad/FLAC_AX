@@ -1,5 +1,5 @@
-// src/main.cpp — Bare-metal Linux FLAC -> ALSA engine with ESS DAC hooks,
-// zero-disk FLAC::Decoder::Stream playback, RT memory locking, and rate-lock
+// src/main.cpp — Bare-metal Linux FLAC & DoP DSD -> ALSA engine with ESS DAC hooks,
+// hardware UAC2 mixer volume, zero-disk RAM preloading, RT memory locking, and rate-lock
 #include "ess_dac_hooks.hpp"
 #include "preload_policy.hpp"
 
@@ -41,12 +41,18 @@
 
 namespace {
 
-constexpr std::size_t kRingCapacityFrames = 65536; // Must remain a power of 2
+constexpr std::size_t kRingCapacityFrames = 65536;    // Must remain a power of 2
 constexpr std::size_t kStartupWatermarkFrames = 16384; // ~25% of ring (~341 ms @ 48 kHz)
 constexpr std::size_t kXrunRecoveryFrames = 4096;      // Safe refill floor after EPIPE
 
 static_assert((kRingCapacityFrames & (kRingCapacityFrames - 1)) == 0,
               "kRingCapacityFrames must be a power of two");
+
+enum class SourceMode {
+    FlacPcm,
+    DopDsd64,  // 176.4 kHz 24-bit DoP over S32_LE
+    DopDsd128  // 352.8 kHz 24-bit DoP over S32_LE
+};
 
 std::atomic<bool> g_stop_requested{false};
 
@@ -318,7 +324,7 @@ class PersistentDecoderWorker {
 public:
     PersistentDecoderWorker(StereoFrameRing<kRingCapacityFrames>& ring, StreamMeta& meta, int core_id)
         : ring_(ring), meta_(meta), core_id_(core_id) {
-        pcm_scratch_.reserve(16384 * 2); // Pre-reserve max typical FLAC blocksize (16384 stereo frames)
+        pcm_scratch_.reserve(16384 * 2);
         worker_ = std::thread(&PersistentDecoderWorker::RunLoop, this);
     }
 
@@ -326,11 +332,14 @@ public:
         Shutdown();
     }
 
-    void StartTrack(const std::string& path, const std::vector<std::uint8_t>* preloaded_bytes) {
+    void StartTrack(const std::string& path,
+                    const std::vector<std::uint8_t>* preloaded_bytes,
+                    SourceMode mode) {
         {
             std::lock_guard<std::mutex> lock(mtx_);
             current_path_ = path;
             current_bytes_ = preloaded_bytes;
+            current_mode_ = mode;
             cancel_track_.store(false, std::memory_order_relaxed);
             decode_finished_.store(false, std::memory_order_relaxed);
             has_job_ = true;
@@ -367,6 +376,85 @@ public:
     }
 
 private:
+    void RunDopStream(const std::string& path,
+                      const std::vector<std::uint8_t>* preloaded_bytes,
+                      SourceMode mode) {
+        const unsigned int dop_rate = (mode == SourceMode::DopDsd128) ? 352800U : 176400U;
+        meta_.sample_rate.store(dop_rate, std::memory_order_release);
+        meta_.bits_per_sample.store(24U, std::memory_order_release);
+        meta_.channels.store(2U, std::memory_order_release);
+        meta_.meta_ready.store(true, std::memory_order_release);
+
+        flac_ax::ess::DopPacker packer;
+        packer.Reset();
+
+        constexpr std::size_t kChunkFrames = 512;
+        constexpr std::size_t kBytesPerStereoDopFrame = 4; // 2 bytes L + 2 bytes R per DoP sample
+        std::vector<std::uint8_t> raw_buf;
+        FILE* fp = nullptr;
+
+        if (preloaded_bytes != nullptr && !preloaded_bytes->empty()) {
+            raw_buf.assign(preloaded_bytes->begin(), preloaded_bytes->end());
+        } else {
+            fp = std::fopen(path.c_str(), "rb");
+            if (!fp) {
+                std::cerr << "[DoP] Failed to open '" << path << "'\n";
+                meta_.eof_or_error.store(true, std::memory_order_release);
+                return;
+            }
+        }
+
+        std::size_t mem_pos = 0;
+        std::array<std::uint8_t, kChunkFrames * kBytesPerStereoDopFrame> io_buf{};
+
+        while (!g_stop_requested.load(std::memory_order_acquire) &&
+               !cancel_track_.load(std::memory_order_acquire)) {
+            std::size_t bytes_read = 0;
+            if (!raw_buf.empty()) {
+                if (mem_pos >= raw_buf.size()) {
+                    break;
+                }
+                bytes_read = std::min(io_buf.size(), raw_buf.size() - mem_pos);
+                std::memcpy(io_buf.data(), raw_buf.data() + mem_pos, bytes_read);
+                mem_pos += bytes_read;
+            } else {
+                bytes_read = std::fread(io_buf.data(), 1, io_buf.size(), fp);
+                if (bytes_read == 0) {
+                    break;
+                }
+            }
+
+            const std::size_t frames = bytes_read / kBytesPerStereoDopFrame;
+            if (frames == 0) {
+                break;
+            }
+            if (pcm_scratch_.size() < frames * 2) {
+                pcm_scratch_.resize(frames * 2);
+            }
+
+            for (std::size_t i = 0; i < frames; ++i) {
+                const std::uint8_t* p = io_buf.data() + i * kBytesPerStereoDopFrame;
+                const auto dsd_l = static_cast<std::uint16_t>((static_cast<std::uint16_t>(p[0]) << 8) | p[1]);
+                const auto dsd_r = static_cast<std::uint16_t>((static_cast<std::uint16_t>(p[2]) << 8) | p[3]);
+                packer.PackStereoFrame(dsd_l, dsd_r, pcm_scratch_[i * 2 + 0], pcm_scratch_[i * 2 + 1]);
+            }
+
+            std::size_t pushed = 0;
+            while (pushed < frames &&
+                   !g_stop_requested.load(std::memory_order_acquire) &&
+                   !cancel_track_.load(std::memory_order_acquire)) {
+                if (ring_.Push(pcm_scratch_.data() + pushed * 2, frames - pushed)) {
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::microseconds(250));
+            }
+        }
+
+        if (fp) {
+            std::fclose(fp);
+        }
+    }
+
     void RunLoop() {
         if (core_id_ >= 0) {
             cpu_set_t set;
@@ -378,6 +466,7 @@ private:
         while (true) {
             std::string path;
             const std::vector<std::uint8_t>* bytes = nullptr;
+            SourceMode mode = SourceMode::FlacPcm;
 
             {
                 std::unique_lock<std::mutex> lock(mtx_);
@@ -387,18 +476,23 @@ private:
                 }
                 path = current_path_;
                 bytes = current_bytes_;
+                mode = current_mode_;
             }
 
-            FlacMemoryOrFileDecoder decoder(ring_, meta_, pcm_scratch_);
-            const FLAC__StreamDecoderInitStatus init_status =
-                decoder.InitStream(path, bytes, cancel_track_);
-            if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
-                std::cerr << "[FLAC] Failed to initialize decoder for '" << path << "' (status="
-                          << FLAC__StreamDecoderInitStatusString[init_status] << ")\n";
-                meta_.eof_or_error.store(true, std::memory_order_release);
+            if (mode == SourceMode::DopDsd64 || mode == SourceMode::DopDsd128) {
+                RunDopStream(path, bytes, mode);
             } else {
-                decoder.process_until_end_of_stream();
-                decoder.finish();
+                FlacMemoryOrFileDecoder decoder(ring_, meta_, pcm_scratch_);
+                const FLAC__StreamDecoderInitStatus init_status =
+                    decoder.InitStream(path, bytes, cancel_track_);
+                if (init_status != FLAC__STREAM_DECODER_INIT_STATUS_OK) {
+                    std::cerr << "[FLAC] Failed to initialize decoder for '" << path << "' (status="
+                              << FLAC__StreamDecoderInitStatusString[init_status] << ")\n";
+                    meta_.eof_or_error.store(true, std::memory_order_release);
+                } else {
+                    decoder.process_until_end_of_stream();
+                    decoder.finish();
+                }
             }
 
             decode_finished_.store(true, std::memory_order_release);
@@ -423,6 +517,7 @@ private:
     bool shutdown_{false};
     std::string current_path_;
     const std::vector<std::uint8_t>* current_bytes_{nullptr};
+    SourceMode current_mode_{SourceMode::FlacPcm};
     std::atomic<bool> cancel_track_{false};
     std::atomic<bool> decode_finished_{false};
     std::thread worker_;
@@ -585,6 +680,10 @@ void PrintUsage() {
     std::cerr << "Usage: flac_ax <file1.flac> [file2.flac ...] [options]\n"
               << "  --ess <es9281ac_pro|es9281pro>   Target ESS DAC chip hook (default: es9281ac_pro)\n"
               << "  --device <alsa_dev>              ALSA PCM device (default: chip default)\n"
+              << "  --mixer-card <card>              ALSA mixer card name for hw volume (default: FC3)\n"
+              << "  --volume <0.0..1.0>              Set ESS hardware mixer playback level\n"
+              << "  --dop64                          Pack raw DSD64 frames into 176.4 kHz DoP S32_LE\n"
+              << "  --dop128                         Pack raw DSD128 frames into 352.8 kHz DoP S32_LE\n"
               << "  --period <frames>                ALSA period frames (default: chip default 96)\n"
               << "  --buffer-periods <count>         ALSA buffer multiplier (default: auto 4x/8x)\n"
               << "  --profiles <path/to/json>        Cross-check ax-sdk hardware_profiles.json\n";
@@ -601,7 +700,11 @@ int main(int argc, char** argv) {
     std::vector<std::string> queue;
     std::string ess_arg = "es9281ac_pro";
     std::string device_override;
+    std::string mixer_card = "FC3";
     std::string profiles_arg;
+    SourceMode source_mode = SourceMode::FlacPcm;
+    bool has_volume = false;
+    double target_volume = 1.0;
     bool has_period_override = false;
     snd_pcm_uframes_t period_frames = 96U;
     unsigned int buffer_periods_override = 0U;
@@ -612,6 +715,15 @@ int main(int argc, char** argv) {
             ess_arg = argv[++i];
         } else if (arg == "--device" && i + 1 < argc) {
             device_override = argv[++i];
+        } else if (arg == "--mixer-card" && i + 1 < argc) {
+            mixer_card = argv[++i];
+        } else if (arg == "--volume" && i + 1 < argc) {
+            target_volume = std::stod(argv[++i]);
+            has_volume = true;
+        } else if (arg == "--dop64") {
+            source_mode = SourceMode::DopDsd64;
+        } else if (arg == "--dop128") {
+            source_mode = SourceMode::DopDsd128;
         } else if (arg == "--period" && i + 1 < argc) {
             period_frames = static_cast<snd_pcm_uframes_t>(std::stoul(argv[++i]));
             has_period_override = true;
@@ -646,6 +758,16 @@ int main(int argc, char** argv) {
         !device_override.empty() ? device_override : std::string(chip.default_alsa_device);
     if (!has_period_override) {
         period_frames = chip.default_period_frames;
+    }
+
+    flac_ax::ess::EssHardwareMixer hw_mixer;
+    if (has_volume) {
+        if (hw_mixer.Open(mixer_card.c_str()) && hw_mixer.SetNormalizedVolume(target_volume)) {
+            std::cout << "[ESS-MIXER] Hardware volume set on '" << mixer_card << "' to "
+                      << std::clamp(target_volume, 0.0, 1.0) << "\n";
+        } else {
+            std::cerr << "[WARN] Could not apply hardware volume on mixer card '" << mixer_card << "'\n";
+        }
     }
 
 #if defined(FLAC_AX_HAVE_AX_TELEMETRY_HPP)
@@ -707,24 +829,23 @@ int main(int argc, char** argv) {
     for (std::size_t track_idx = 0;
          track_idx < queue.size() && !g_stop_requested.load(std::memory_order_acquire);
          ++track_idx) {
-        // Drop back to SCHED_OTHER on Core 0 for preload I/O, ALSA setup, and console logging
         ApplyThreadAffinityAndPriority(matrix.audio_irq_core, 0, false);
 
-        const std::string& flac_path = queue[track_idx];
+        const std::string& track_path = queue[track_idx];
         preloader.RefreshWindow(queue, track_idx);
-        const auto* cached_entry = preloader.Find(flac_path);
+        const auto* cached_entry = preloader.Find(track_path);
         const std::vector<std::uint8_t>* preloaded_bytes =
             (cached_entry != nullptr) ? &cached_entry->bytes : nullptr;
 
         std::cout << "[QUEUE] Track " << (track_idx + 1) << "/" << queue.size()
-                  << ": " << flac_path
+                  << ": " << track_path
                   << " (source=" << (preloaded_bytes ? "RAM" : "disk")
                   << ", cached_files=" << preloader.CachedFileCount()
                   << ", cached_mib=" << (preloader.TotalBytes() / (1024ULL * 1024ULL)) << ")\n";
 
         ring->Reset();
         meta.Reset();
-        decoder_worker.StartTrack(flac_path, preloaded_bytes);
+        decoder_worker.StartTrack(track_path, preloaded_bytes, source_mode);
 
         while (!meta.meta_ready.load(std::memory_order_acquire) &&
                !meta.eof_or_error.load(std::memory_order_acquire) &&
@@ -746,9 +867,9 @@ int main(int argc, char** argv) {
         const unsigned int channels = meta.channels.load(std::memory_order_acquire);
         const unsigned int target_rate = flac_ax::ess::NegotiateEssRate(chip, stream_rate);
 
-        std::cout << "[FLAC] Stream: " << stream_rate << " Hz, " << bps << "-bit, " << channels << " ch\n";
+        std::cout << "[STREAM] Rate=" << stream_rate << " Hz, " << bps << "-bit, " << channels << " ch"
+                  << (source_mode != SourceMode::FlacPcm ? " [DoP]" : " [FLAC]") << "\n";
 
-        // Pre-fill ring buffer before starting or re-locking ALSA output
         WaitForStartupWatermark(*ring, decoder_worker, meta, kStartupWatermarkFrames);
 
         if (target_rate != active_rate || active_period == 0) {
@@ -771,8 +892,8 @@ int main(int argc, char** argv) {
             active_rate = actual_rate;
             active_period = actual_period;
             out_buffer.assign(active_period * 2, 0);
-}
-        // Promote output thread to SCHED_FIFO 80 on Core 0 (zero stdio/allocations inside loop)
+        }
+
         ApplyThreadAffinityAndPriority(matrix.audio_irq_core, 80, !rt_warned);
         rt_warned = true;
 
@@ -803,7 +924,7 @@ int main(int argc, char** argv) {
                 if (written >= 0) {
                     frame_offset += static_cast<std::size_t>(written);
                     total_frames_written += static_cast<std::size_t>(written);
-                } else if (written == -EAGAIN) {
+                } else if (written == -EAGAIN || written == -EINTR) {
                     snd_pcm_wait(pcm, 5);
                 } else if (written == -EPIPE) {
                     ++xruns;
@@ -874,4 +995,6 @@ int main(int argc, char** argv) {
 #endif
     return exit_code;
 }
+```[cite: 21, 22, 33, 34]
 
+Would you also like the full updated `src/studio_main.cpp` next so `ax_av_studio` uses `EssHardwareMixer` (for example, binding hardware DAC attenuation to `K8` or `--volume`) and checks `/run/lock/ax-dac.lock` cleanly[cite: 21, 22, 31, 33]?
