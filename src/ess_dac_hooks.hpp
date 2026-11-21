@@ -270,6 +270,4 @@ inline ProfileMatrixCheck CrossCheckHardwareProfiles(
 }
 
 } // namespace flac_ax::ess
-```[cite: 21, 22, 33]
-
-Would you like the full updated **`src/main.cpp`** or **`src/studio_main.cpp`** next to wire `EssHardwareMixer` and `DopPacker` into your playback or studio loops[cite: 21, 22, 31, 34]?
+```
