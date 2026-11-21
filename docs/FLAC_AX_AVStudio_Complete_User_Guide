@@ -12,7 +12,7 @@ Modern desktop operating systems treat audio as a background convenience service
 
 1. **⚡ Deterministic `2:3:1` Core Partitioning (Zero Scheduler Contention)**
    Instead of letting the OS kernel migrate audio threads across cores alongside UI rendering and disk I/O, `FLAC_AX` pins workloads strictly by role:
-   * **Cores `0–1` (System & UI Plane):** SDL2/OpenGL oscilloscope & 64-band FFT spectrum visualizer (`ax_av_studio`), off-RT MIDI OLED SysEx feedback, and OS housekeeping.
+   * **Cores `0–1` (System & UI Plane):** SDL2/OpenGL oscilloscope and 64-band FFT spectrum visualizer (`ax_av_studio`), off-RT MIDI OLED SysEx feedback, and OS housekeeping.
    * **Cores `2–4` (Real-Time DSP & Audio Plane):** `SCHED_FIFO` real-time audio callback and AVX2/SVF/reverb/delay synthesis—completely isolated from disk reads, heap allocations, and mutexes.
    * **Core `5` (I/O & Peripheral Plane):** Whole-album RAM preloading (`RamFilePreloader`), FLAC/DSD decoding, and lock-free ALSA RawMIDI ingestion (`MpkMini3Listener`).
 
@@ -50,20 +50,3 @@ Both executables share the same deterministic hardware execution model so audio 
 * **🔌 Core `5` (Peripheral & Preload I/O Plane):**
   * `flac_ax`: Runs `PersistentDecoderWorker`, preloading entire FLAC albums or `.dsf`/`.dff` DSD64/DSD128 files into RAM (`RamFilePreloader`) and feeding the lock-free SPSC ring buffer.
   * `ax_av_studio`: Runs `MpkMini3Listener` (`ALSA RawMIDI` non-blocking reader) parsing incoming notes, pads, pitch bend, and CC messages into a 1024-entry power-of-two lock-free ring buffer.
-
----
-
-## 🔧 3. Hardware & OS Preparation
-
-### 🔐 3.1 Exclusive DAC Arbitration (`/run/lock/ax-dac.lock`)
-Only one application may hold the ESS Sabre USB DAC (`hw:CARD=FC3,DEV=0`) at a time. Both `flac_ax` and `ax_av_studio` acquire an exclusive `flock` on `/run/lock/ax-dac.lock` before opening ALSA PCM. If the DAC is already in use, the second process exits cleanly with an actionable lock message rather than failing with a cryptic ALSA `EBUSY` error.
-
-### 🔌 3.2 Low-Latency USB Udev Rule (`VID 0x32BB`)
-Install the following udev rule on Linux to disable USB autosuspend and force minimal isochronous packet batching (`nrpacks=1`) whenever the HiBy FC3 (`VID 0x32BB`) connects:
-
-```bash
-sudo tee /etc/udev/rules.d/99-ax-ess-dac.rules >/dev/null <<'EOF'
-ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="32bb", ATTR{power/control}="on", ATTR{power/autosuspend}="-1"
-ACTION=="add", SUBSYSTEM=="sound", ATTRS{idVendor}=="32bb", RUN+="/bin/sh -c 'echo 1 > /sys/module/snd_usb_audio/parameters/nrpacks'"
-EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger
