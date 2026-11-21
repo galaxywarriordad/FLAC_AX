@@ -1,23 +1,24 @@
-# 🎛️ FLAC_AX & AX AV Studio
+# 🎛️ FLAC_AX, AX AV Studio & AX Video Upscaler
 
-**Deterministic `[AX]` Bit-Perfect Audio Transport, Live Synthesizer Workstation & ESS Sabre Appliance for `Piccolo [AX]`**
+**Deterministic `[AX]` Bit-Perfect Audio Transport, Live Synthesizer Workstation, Single-Stream A/V Upscaler & ESS Sabre Appliance for `Piccolo [AX]`**
 
-`FLAC_AX` unites two zero-compromise C++20 real-time applications built around a deterministic **`2:3:1` physical CPU core topology** on `Linux 6.12-rt` (`Piccolo [AX]`) and standard `x86_64` Linux workstations:
+`FLAC_AX` unites three zero-compromise C++20 real-time applications built around a deterministic **`2:3:1` physical CPU core topology** on `Linux 6.12-rt` (`Piccolo [AX]`) and standard `x86_64` Linux workstations:
 
 1. **`flac_ax`** — A headless, bit-perfect high-resolution audio transport playing lossless **FLAC** (`PCM` up to `384 kHz / 32-bit`) and native **DSD64 / DSD128** (`.dsf` & `.dff`) via **DoP** (`176.4 kHz` / `352.8 kHz` over `S32_LE`) straight from locked RAM to an **ESS Sabre USB DAC** (`HiBy FC3` / `ES9281AC Pro`).
 2. **`ax_av_studio`** — A `2.00 ms` (`96 frames @ 48 kHz`) real-time 16-voice polyphonic subtractive synthesizer, 8-voice percussion synthesizer, 4-comb stereo Schroeder reverb (`StereoReverbDsp`), damped ping-pong tape echo (`TapeDelayDsp`), and VBlank-locked 60 FPS OpenGL oscilloscope & 64-band FFT spectrum HUD driven by the **Akai MPK Mini MK3**.
+3. **`ax_video_upscaler`** — A deterministic, single-stream **720p / 1080p / 2K** (`1280x720`, `1920x1080`, `2560x1440`) DVD & live retro console HDMI upscaler (`MacroSilicon MS2130S` USB 3.0 UVC/UAC) featuring `240p` passthrough, `480i/576i` Bob deinterlacing, DVD adaptive cadence, anti-ringing `FP32` scaling within a `5.50 GiB` VRAM ceiling (`GTX 980 Ti`), and audio-master PTS synchronization (`AudioMasterPtsSync`) anchored to the ESS Sabre DAC.
 
 ---
 
 ## 🎯 What It Means For You
 
-### 🎮 For Gamers
-* **Zero-Contention Hardware Arbitration:** `FLAC_AX` respects `/run/lock/ax-dac.lock` (`flock`) and clean `SIGUSR1` / `SIGTERM` handoff—meaning your music player or synth rig immediately yields the ESS Sabre USB DAC when you launch an emulator or full-screen game, and reclaims it cleanly when you exit without ALSA `EBUSY` lockups.
-* **Sub-2 ms Audio Discipline:** Built with the exact same `SCHED_FIFO` real-time scheduling, `nrpacks=1` USB isochronous packet tuning, and `2:3:1` core pinning required by competitive low-latency emulation on `Piccolo [AX]`, ensuring frame-paced gameplay and crisp transient audio never fight for CPU time.
+### 🎮 For Gamers & Retro Enthusiasts
+* **Zero-Contention Hardware Arbitration:** `FLAC_AX` respects `/run/lock/ax-dac.lock` (`flock`) and clean `SIGUSR1` / `SIGTERM` handoff—meaning your music player, synth rig, or video upscaler immediately yields the ESS Sabre USB DAC when you switch modes or launch an emulator, and reclaims it cleanly when you exit without ALSA `EBUSY` lockups.
+* **Sub-2 ms Audio & Low-Latency HDMI Capture:** Built with the exact same `SCHED_FIFO` real-time scheduling, `nrpacks=1` USB isochronous packet tuning, and `2:3:1` core pinning required by competitive low-latency emulation on `Piccolo [AX]`. In `retro` mode, `ax_video_upscaler` pulls uncompressed `YUYV 4:2:2` (`MJPEG` fallback) frames over USB 3.0 from a **MacroSilicon MS2130S** on Core 5 (`MMAP` newest-frame handoff) and upscales to `720p`, `1080p`, or `2K` without queue lag.
 
-### 🎧 For Audiophiles
+### 🎧 For Audiophiles & Home Cinema Listeners
 * **100% RAM-Resident Playback (Zero Storage Bus Noise):** `flac_ax` preloads entire FLAC albums and native `.dsf`/`.dff` DSD masters into locked memory on Core 5 (`RamFilePreloader`) before playback starts, letting your storage bus go completely idle during listening.
-* **True Bit-Perfect `S32_LE` & DoP Pipeline:** Bypasses PipeWire, PulseAudio, `dmix`, software volume scaling, and kernel resampling completely—feeding raw `32-bit` PCM (`44.1 kHz – 384 kHz`) and `0x05`/`0xFA`-packed `DSD64`/`DSD128` streams directly to the ESS Sabre `ES9281AC Pro` DAC chip.
+* **True Bit-Perfect `S32_LE`, DoP & Audio-Master DVD Sync:** Bypasses PipeWire, PulseAudio, `dmix`, software volume scaling, and kernel resampling completely—feeding raw `32-bit` PCM (`44.1 kHz – 384 kHz`) and `0x05`/`0xFA`-packed `DSD64`/`DSD128` streams directly to the ESS Sabre `ES9281AC Pro` DAC chip. For DVD playback (`ax_video_upscaler --mode dvd`), `AudioMasterPtsSync` anchors video presentation timestamps directly to the ESS Sabre `S32_LE` sample clock (with host-side 5.1-to-stereo downmix headroom ahead of the DAC).
 
 ### 🎹 For Musicians
 * **Hardware-Feel `2.00 ms` Response:** Strike a key or pad on the **Akai MPK Mini MK3** and hear the result in `96` samples (`2.00 ms` at `48 kHz`)—faster than acoustic sound travels two feet from your studio monitors—backed by zero-allocation DSP and lock-free SPSC MIDI queues.
@@ -29,18 +30,20 @@
 
 | Plane | CPU Core(s) | Scheduling | Role |
 | :--- | :--- | :--- | :--- |
-| **Audio Clock Domain** | **Core 0** (`0x01`) | `SCHED_FIFO` (Prio `80`) | Direct ALSA `hw:CARD=FC3,DEV=0` `S32_LE` output, USB xHCI IRQ affinity, zero-allocation audio loop. |
-| **Video Clock Domain** | **Core 1** (`0x02`) | Standard / VSync | VBlank-locked OpenGL Studio HUD (256-sample stereo scope, 64-band log FFT, MIDI matrix) + rate-limited OLED SysEx flush. |
+| **Audio Clock Domain** | **Core 0** (`0x01`) | `SCHED_FIFO` (Prio `80`) | Direct ALSA `hw:CARD=FC3,DEV=0` `S32_LE` output, USB xHCI IRQ affinity, zero-allocation audio loop, and `AudioMasterPtsSync` clock updates. |
+| **Video Clock Domain** | **Core 1** (`0x02`) | Standard / VSync | VBlank-locked OpenGL Studio HUD (256-sample stereo scope, 64-band log FFT, MIDI matrix), rate-limited OLED SysEx flush, and `720p`/`1080p`/`2K` frame pacing & shader pass (`GTX 980 Ti`). |
 | **DSP & Synthesis** | **Cores 2–4** | Worker / Inline | 16-voice saw/sub SVF synth, 8-voice drum synth, `StereoReverbDsp`, `TapeDelayDsp`, and 1024-pt Radix-2 FFT. |
-| **Control & Storage** | **Core 5** (`0x20`) | Non-RT Background | Non-blocking ALSA RawMIDI listener (`MpkMini3Listener`), `RamFilePreloader`, and FLAC/DSD stream decoding (`PersistentDecoderWorker`). |
+| **Control & Storage** | **Core 5** (`0x20`) | Non-RT Background (`storage_aux`) | Non-blocking ALSA RawMIDI listener (`MpkMini3Listener`), `RamFilePreloader`, FLAC/DSD stream decoding (`PersistentDecoderWorker`), and `V4l2LiveCaptureSource` (`MS2130S` `MMAP` capture). |
 
 ---
 
 ## 🧰 Hardware Baseline
 
 * **CPU / Host:** 6-core `x86_64` desktop processor (e.g., Intel Core `i5-9600K` / `i5-8600K`) with `16–32 GB` RAM running Linux (`Piccolo [AX]` `6.12-rt` or desktop Linux)
-* **DAC:** **HiBy FC3** (`VID 0x32BB`, ESS Sabre `ES9281AC Pro` / `ES9281PRO`)
-* **Controller (Optional for `ax_av_studio`):** **Akai MPK Mini MK3** (25 keys, 16 velocity pads, XY thumbstick, 8 rotary encoders K1–K8)
+* **GPU (`ax_av_studio` & `ax_video_upscaler`):** **NVIDIA GTX 980 Ti** (`6 GB` GDDR5, governed by `5.50 GiB` VRAM ceiling and `5.00 GiB` reap trigger in `ax-sdk` `hardware_profiles.json` `v2.1`)
+* **DAC:** **HiBy FC3** (`VID 0x32BB`, ESS Sabre `ES9281AC Pro` / `ES9281PRO`, PCM `S32_LE` & DoP)
+* **HDMI Capture (`ax_video_upscaler`, Optional):** **MacroSilicon MS2130S** (`VID:PID 534d:2130`, USB 3.0 `5000M` UVC `YUYV 4:2:2` / `MJPEG` + UAC `48 kHz` audio)
+* **Controller (`ax_av_studio`, Optional):** **Akai MPK Mini MK3** (25 keys, 16 velocity pads, XY thumbstick, 8 rotary encoders K1–K8)
 
 ---
 
@@ -51,7 +54,7 @@
 sudo apt update
 sudo apt install -y \
   build-essential clang lld cmake ninja-build pkg-config \
-  libasound2-dev libflac-dev libflac++-dev libsdl2-dev libgl-dev
+  libasound2-dev libflac-dev libflac++-dev libsdl2-dev libgl-dev v4l-utils
 ```
 
 ### 2. Configure & Compile (`-j 4` L3 Cache Discipline)
@@ -60,6 +63,7 @@ cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DFLAC_AX_USE_AX_SDK=ON \
   -DFLAC_AX_BUILD_AV_STUDIO=ON \
+  -DFLAC_AX_BUILD_VIDEO_UPSCALER=ON \
   -DFLAC_AX_NATIVE_ARCH=OFF \
   -DFLAC_AX_ENABLE_LTO=ON
 
@@ -68,11 +72,17 @@ ninja -C build -j 4
 
 ### 3. Run
 ```bash
-# Headless bit-perfect FLAC / DSD DoP playback
+# 1. Headless bit-perfect FLAC / DSD DoP playback
 ./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.80 /music/album/
 
-# Live 2.0 ms AV Synthesizer & OpenGL Spectrum Studio
+# 2. Live 2.0 ms AV Synthesizer & OpenGL Spectrum Studio
 ./build/ax_av_studio --fullscreen --device hw:CARD=FC3,DEV=0 --volume 0.80
+
+# 3. Single-stream 720p / 1080p / 2K Retro HDMI Capture (MacroSilicon MS2130S)
+./build/ax_video_upscaler --mode retro --preset 1080p --v4l2 /dev/video0 --scan bob --device hw:CARD=FC3,DEV=0 --volume 0.80
+
+# 4. Single-stream 720p / 1080p / 2K DVD Upscaler (Audio-Master PTS Sync)
+./build/ax_video_upscaler --mode dvd --preset 2k --input /media/dvd_title.iso --scan dvd --device hw:CARD=FC3,DEV=0 --volume 0.80
 ```
 
 ---
