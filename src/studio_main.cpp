@@ -315,6 +315,4 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
-```[cite: 8, 10]
 
-<FollowUp label="Want me to draft the .dsf / .dff DoP container parser next?" query="Yes, write a clean .dsf and .dff header/stream parser in C++20 for DoP DSD64 and DSD128 playback."/>
