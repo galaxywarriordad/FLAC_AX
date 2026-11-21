@@ -45,7 +45,7 @@ void InstallSignals() noexcept {
     struct sigaction sa {};
     sa.sa_handler = OnSignal;
     sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
+    sa.sa_flags = 0; // Do not SA_RESTART so SIGUSR1 / SIGINT / SIGTERM wake promptly
     sigaction(SIGINT, &sa, nullptr);
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGUSR1, &sa, nullptr); // Yield DAC cleanly when an emulator launches
@@ -87,7 +87,8 @@ bool ConfigureStudioAlsa(snd_pcm_t* pcm,
     snd_pcm_uframes_t period = period_frames;
     if (snd_pcm_hw_params_set_period_size_near(pcm, params, &period, &dir) < 0) return false;
 
-    snd_pcm_uframes_t buffer = period * chip.default_buffer_periods;
+    const unsigned int mult = flac_ax::ess::RecommendedBufferPeriods(chip, rate, 0);
+    snd_pcm_uframes_t buffer = period * mult;
     if (snd_pcm_hw_params_set_buffer_size_near(pcm, params, &buffer) < 0) return false;
 
     if (snd_pcm_hw_params(pcm, params) < 0) return false;
@@ -98,12 +99,27 @@ bool ConfigureStudioAlsa(snd_pcm_t* pcm,
     return flac_ax::ess::OnEssHardwareConfigured(chip, pcm, out_rate, out_period);
 }
 
+void PrintUsage() {
+    std::cerr << "Usage: ax_av_studio [options]\n"
+              << "  --fullscreen             Launch Core 1 HUD in fullscreen desktop mode\n"
+              << "  --headless               Run audio/MIDI/DSP without opening the HUD window\n"
+              << "  --device <alsa_dev>      ALSA PCM device (default: hw:CARD=FC3,DEV=0)\n"
+              << "  --mixer-card <card>      ALSA mixer card for hw volume (default: FC3)\n"
+              << "  --volume <0.0..1.0>      Set ESS hardware mixer playback level\n"
+              << "  --midi <rawmidi_dev>     Explicit ALSA RawMIDI device (default: auto-detect)\n"
+              << "  --rate <hz>              Target sample rate (default: 48000)\n"
+              << "  --period <frames>        ALSA period frames (default: 96)\n";
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
     bool fullscreen = false;
     bool headless = false;
+    bool has_volume = false;
+    double target_volume = 1.0;
     std::string device_override;
+    std::string mixer_card = "FC3";
     std::string midi_override;
     unsigned int sample_rate = 48000U;
     snd_pcm_uframes_t period_frames = 96U; // 2.00 ms @ 48 kHz
@@ -116,17 +132,52 @@ int main(int argc, char** argv) {
             headless = true;
         } else if (arg == "--device" && i + 1 < argc) {
             device_override = argv[++i];
+        } else if (arg == "--mixer-card" && i + 1 < argc) {
+            mixer_card = argv[++i];
+        } else if (arg == "--volume" && i + 1 < argc) {
+            target_volume = std::stod(argv[++i]);
+            has_volume = true;
         } else if (arg == "--midi" && i + 1 < argc) {
             midi_override = argv[++i];
         } else if (arg == "--rate" && i + 1 < argc) {
             sample_rate = static_cast<unsigned int>(std::stoul(argv[++i]));
         } else if (arg == "--period" && i + 1 < argc) {
             period_frames = static_cast<snd_pcm_uframes_t>(std::stoul(argv[++i]));
+        } else {
+            PrintUsage();
+            return 1;
         }
     }
 
     InstallSignals();
-    mlockall(MCL_CURRENT | MCL_FUTURE);
+    if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+        std::cerr << "[STUDIO] WARN: mlockall skipped (check CAP_IPC_LOCK / RLIMIT_MEMLOCK)\n";
+    }
+
+    // Acquire exclusive DAC arbitration lock (/run/lock/ax-dac.lock)
+    const int lock_fd = ::open("/run/lock/ax-dac.lock", O_CREAT | O_RDWR | O_CLOEXEC, 0666);
+    if (lock_fd < 0) {
+        std::cerr << "[STUDIO] Failed to open /run/lock/ax-dac.lock\n";
+        return 1;
+    }
+    if (::flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
+        std::cerr << "[STUDIO] DAC lock busy (/run/lock/ax-dac.lock held by another process)\n";
+        ::close(lock_fd);
+        return 1;
+    }
+
+    const auto chip = flac_ax::ess::MakeEssProfile(flac_ax::ess::EssChipFamily::Es9281AcPro);
+    const std::string alsa_dev = !device_override.empty() ? device_override : chip.default_alsa_device;
+
+    flac_ax::ess::EssHardwareMixer hw_mixer;
+    if (has_volume) {
+        if (hw_mixer.Open(mixer_card.c_str()) && hw_mixer.SetNormalizedVolume(target_volume)) {
+            std::cout << "[STUDIO] ESS hardware volume set on '" << mixer_card << "' to "
+                      << std::clamp(target_volume, 0.0, 1.0) << "\n";
+        } else {
+            std::cerr << "[STUDIO] WARN: Failed to apply hardware volume on '" << mixer_card << "'\n";
+        }
+    }
 
 #if defined(FLAC_AX_STUDIO_HAVE_TELEMETRY)
     ax::EngineConfig ax_cfg{};
@@ -137,19 +188,14 @@ int main(int argc, char** argv) {
     ax::ResetTelemetry();
 #endif
 
-    // Acquire shared DAC arbitration lock (/run/lock/ax-dac.lock)
-    const int lock_fd = ::open("/run/lock/ax-dac.lock", O_CREAT | O_RDWR | O_CLOEXEC, 0666);
-    if (lock_fd >= 0) {
-        (void)::flock(lock_fd, LOCK_EX | LOCK_NB);
-    }
-
-    const auto chip = flac_ax::ess::MakeEssProfile(flac_ax::ess::EssChipFamily::Es9281AcPro);
-    const std::string alsa_dev = !device_override.empty() ? device_override : chip.default_alsa_device;
-
     snd_pcm_t* pcm = nullptr;
     if (snd_pcm_open(&pcm, alsa_dev.c_str(), SND_PCM_STREAM_PLAYBACK, 0) < 0) {
         std::cerr << "[STUDIO] Failed to open ESS Sabre ALSA device '" << alsa_dev << "'\n";
-        if (lock_fd >= 0) ::close(lock_fd);
+#if defined(FLAC_AX_STUDIO_HAVE_TELEMETRY)
+        ax::ShutdownTelemetryShm();
+#endif
+        (void)::flock(lock_fd, LOCK_UN);
+        ::close(lock_fd);
         return 1;
     }
 
@@ -158,7 +204,11 @@ int main(int argc, char** argv) {
     if (!ConfigureStudioAlsa(pcm, chip, sample_rate, period_frames, actual_rate, actual_period)) {
         std::cerr << "[STUDIO] Failed to configure ALSA hardware parameters\n";
         snd_pcm_close(pcm);
-        if (lock_fd >= 0) ::close(lock_fd);
+#if defined(FLAC_AX_STUDIO_HAVE_TELEMETRY)
+        ax::ShutdownTelemetryShm();
+#endif
+        (void)::flock(lock_fd, LOCK_UN);
+        ::close(lock_fd);
         return 1;
     }
 
@@ -185,7 +235,6 @@ int main(int argc, char** argv) {
 #if defined(FLAC_AX_STUDIO_HAVE_TELEMETRY)
             const auto t0 = std::chrono::steady_clock::now();
 #endif
-            // Drain all pending MPK Mini MK3 events lock-free
             while (mpk_listener.PopEvent(ev)) {
                 synth.ProcessMidiEvent(ev);
             }
@@ -198,7 +247,7 @@ int main(int argc, char** argv) {
                     snd_pcm_writei(pcm, period_buf.data() + offset * 2, actual_period - offset);
                 if (written >= 0) {
                     offset += static_cast<std::size_t>(written);
-                } else if (written == -EAGAIN) {
+                } else if (written == -EAGAIN || written == -EINTR) {
                     snd_pcm_wait(pcm, 2);
                 } else if (written == -EPIPE) {
                     xrun_count.fetch_add(1, std::memory_order_relaxed);
@@ -256,13 +305,16 @@ int main(int argc, char** argv) {
 
     snd_pcm_drop(pcm);
     snd_pcm_close(pcm);
-    if (lock_fd >= 0) {
-        (void)::flock(lock_fd, LOCK_UN);
-        ::close(lock_fd);
-    }
+    hw_mixer.Close();
+
+    (void)::flock(lock_fd, LOCK_UN);
+    ::close(lock_fd);
 
 #if defined(FLAC_AX_STUDIO_HAVE_TELEMETRY)
     ax::ShutdownTelemetryShm();
 #endif
     return 0;
 }
+```[cite: 21, 22, 31, 33, 42]
+
+With `ess_dac_hooks.hpp`, `main.cpp`, and `studio_main.cpp` all aligned on the audio path, you're in a great spot to test the `FLAC_AX` build in the browser/VM or add the Buildroot package (`batocera-ax-external/package/flac-ax/`) with `VID 0x32BB` USB autosuspend disabled[cite: 1, 21, 22].
