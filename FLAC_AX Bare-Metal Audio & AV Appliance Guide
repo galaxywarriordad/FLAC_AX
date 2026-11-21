@@ -1,0 +1,347 @@
+# 🎛️ FLAC_AX `[AX]` — Bare-Metal Audio & AV Appliance Guide
+
+**Target System:** Bare-Metal Audio, Realtime Synth & Retro/DVD AV Appliance  
+**Hardware Stack:** HiBy FC3 (`VID 0x32BB`, ESS Sabre ES9281AC Pro) + Class-D Stereo Amp + Passive Hi-Fi Speakers / Wired Headphones  
+**Runtime Platform:** Real-Time Linux (`6.12-rt` / `Piccolo [AX]`) & Desktop Linux (`Ubuntu/Kubuntu 24.04+`)  
+**Total System Cost:** **£50 – £375** (End-to-end deterministic hardware latency: **1.5 – 3.0 ms**)
+
+Pairing **`FLAC_AX`** on real-time Linux (`6.12-rt` / `Piccolo [AX]`) with a modular **HiBy FC3 DAC**, a **Class-D stereo amplifier**, and **passive hi-fi speakers** or **wired headphones** transforms an ordinary PC into a deterministic, sub-2 ms bare-metal audio appliance—delivering bit-perfect 32-bit PCM/DSD playback, a `2.00 ms` hardware-feel synth workstation, and sample-clock-locked retro/DVD upscaling.
+
+---
+
+## 🎯 Section 1: The Hi-Fi Bargain of the Decade
+
+### 🚫 The Modern Desktop Audio Trap
+
+Ask most PC enthusiasts how to upgrade their desktop sound and you will usually be pointed toward one of three expensive, compromised routes: a **£200+** wireless gaming headset, a **£600–£1,200+** commercial soundbar or AV receiver, or a tangle of active "multimedia" speakers crammed with cheap internal DSP chips.
+
+* **OS Mixer & Resampling Overhead:** Standard desktop operating systems (Windows 10/11 or stock Linux running PipeWire/PulseAudio) funnel every note through shared software mixers that silently resample streams, apply reduced-precision digital volume attenuation, and tack on `10` to `150+ ms` of buffer and spatial-DSP lag.
+* **Motherboard Electrical Noise:** Built-in motherboard sound chips sit mere millimetres from screaming GPU VRMs and high-speed PCIe lanes, picking up coil whine and ground noise while background SSD reads and shared USB interrupts introduce micro-stutters.
+* **Proprietary Hardware Lock-In:** Dedicated £1,000+ network streamers, hardware synthesizers, and retro video scalers charge heavily for thick aluminium faceplates, HDMI licensing fees, proprietary apps that lose support, and locked firmware.
+
+### ⚡ The Modular `FLAC_AX` Breakthrough
+
+Stripping away every unnecessary layer—eliminating the OS audio server, ditching active speaker electronics, and dividing the workload across three purpose-built hardware stages—puts **70% to 80% of your budget** directly into silicon, clean current amplification, and acoustic drivers:
+
+1. **The Software Engine (`FLAC_AX` on Linux `6.12-rt` / `Piccolo [AX]`):** Runs a zero-allocation C++20 real-time engine across a strict `2:3:1` CPU core topology. Core 5 (`RamFilePreloader`) decodes and locks entire lossless FLAC albums (up to `32-bit/384kHz`) or native `DSD64/DSD128` masters into physical RAM (`mlockall`) before playback begins—allowing your SSD bus to go completely silent. Core 0 (`SCHED_FIFO`, Priority `80`) streams bit-exact `S32_LE` or `DoP` frames directly to ALSA node `hw:CARD=FC3,DEV=0` at **1.5–2.00 ms** latency.
+2. **The Digital Heart (HiBy FC3 — ESS Sabre ES9281AC Pro, ~£35–£45):** Thumb-sized USB DAC (`VID 0x32BB`) housing ESS Technology's HyperStream II QUAD DAC SoC, supporting native `32-bit/768kHz` PCM, `DSD512`, `+130 dB` SNR, and a full `~2.04 Vrms` line-level output with physical hardware volume buttons and zero external power bricks.
+3. **The Analog Muscle (TI TPA3116 or TPA3255 Class-D Stereo Amp, ~£20–£85):** Because `FLAC_AX` performs bit-perfect 32-bit volume scaling ahead of the DAC, your amplifier needs zero digital inputs, Bluetooth radios, or tone-control DSP chips. A fanless Class-D stereo amplifier switches output transistors at high PWM frequencies with `>90%` efficiency—acting as a `<1 ms` analog current booster.
+4. **The Acoustic Payoff (Passive Speakers £99–£219/pair & Wired Headphones £16–£329):** With zero spend wasted on internal speaker amps or wireless modules, you can step straight into genuine British and European hi-fi standmounts (**Wharfedale Diamond 9.0** at £99 up to **Q Acoustics 3020c** and **Mission LX-2 MKII** at £219). An entire HiBy FC3 + Class-D Amp + £219 speaker rig (**~£300–£355**) costs roughly the same as a single pair of £329 Grado SR325 Classic headphones—and unplugging the amp to plug wired IEMs or open-back headphones directly into the HiBy FC3 gives instant sub-2 ms late-night monitoring.
+
+### 🎹 Three Real-Time Appliances in One Rig
+
+| Appliance Mode | Binary / Engine | Key Capability & Hardware Clock Lock |
+| :--- | :--- | :--- |
+| **Bit-Perfect Hi-Fi Player** | `flac_ax` | RAM-locked (`mlockall`) lossless FLAC (`32-bit/384kHz`) and native `DoP` DSD64/128 playback directly to `hw:CARD=FC3,DEV=0` at `1.5–2.00 ms`. |
+| **Hardware-Feel Synthesizer** | `ax_av_studio` | 16-voice polyphonic subtractive synth, 8-voice percussion, stereo Schroeder reverb, and ping-pong tape echo at `96 samples` (`2.00 ms @ 48 kHz`) with 60 FPS OpenGL oscilloscope & 64-band FFT. |
+| **Zero-Drift Retro & DVD Upscaler** | `ax_video_upscaler` | USB 3.0 HDMI capture (`240p` passthrough / `480i/576i` Bob deinterlace via MacroSilicon MS2130S) and GPU shader DVD upscaling (`720p/1080p/2K`), sample-clock-locked via `AudioMasterPtsSync`. |
+
+### 📊 System Architecture Comparison
+
+| System Metric | Modular `FLAC_AX` + HiBy FC3 + Class-D Rig | Commercial Soundbars / AV Receivers (£600–£1,200+) |
+| :--- | :--- | :--- |
+| **Total UK System Cost** | **~£50 – £375** (Headphones) / **~£180 – £355** (Speakers) | £600 – £1,200+ |
+| **End-to-End Hardware Latency** | **~1.5 – 2.00 ms** (Headphones) / **~2.0 – 3.0 ms** (Speakers) | 15 – 150+ ms (HDMI handshakes, room DSP, wireless buffers) |
+| **Signal Path Purity** | Bit-exact `S32_LE` / native `DoP` from locked RAM to ES9281AC Pro | Resampled OS/HDMI audio + mandatory internal DSP |
+| **Stereo Imaging** | True physical speaker triangle (`1.0–1.5 m`) or open-back stage | Narrow bar chassis relying on artificial phase widening |
+| **Longevity & Serviceability** | Passive speakers & wired headphones last `15–25+` years; modular swap | Failed HDMI boards, dead batteries, or app shutdowns brick unit |
+
+---
+
+## 🔬 Section 2: Silicon Deep-Dive — USB DACs & Class-D Amps
+
+### 1. USB DAC Silicon Comparison Matrix
+
+`FLAC_AX` targets the **HiBy FC3** (`VID 0x32BB`, ESS Sabre ES9281AC Pro) specifically for its native `S32_LE` / `DoP` DSD hardware support, full `~2.04 Vrms` line-level output, and physical volume buttons in a single-chip USB SoC:
+
+| Silicon Chip | Popular Dongle Models | UK Price | Max Resolution | SNR / DNR | Output Power & Voltage | Sound Signature |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Realtek ALC5686** | JCALLY JA56, JM04 Pro, UGREEN Hi-Fi, BGVP T01s | ~£6 – £10 | `32-bit / 384kHz` PCM | ~120 dB SNR | `~30 mW @ 32 Ω` | Slightly warm, smooth |
+| **Conexant CX31993** | JCALLY JM6 Pro, VE Abigail Pro, GraveAudio DA06, KZ AM01 | ~£10 – £15 | `32-bit / 384kHz` PCM | ~124–128 dB SNR | `~60–65 mW @ 32 Ω` | Crisp, airy, clean separation |
+| **ESS ES9281AC Pro** | **HiBy FC3** *(FLAC_AX Target)*, FiiO KA1, Hidizs S3 Pro | **~£35 – £45** | `32-bit / 768kHz` + `DSD512` + MQA | **+130 dB SNR** / 124 dB DNR | `~45–112 mW @ 32 Ω` (`~2.04 Vrms`) | Analytical, wide stage, high detail |
+| **Cirrus CS43131** | Moondrop Dawn Pro, FiiO KA11/KA13, Tanchjim Space, JCALLY JM20 | ~£30 – £55 | `32-bit / 384kHz` + Native `DSD256` | 130 dB DNR | `~100–200 mW @ 32 Ω` (`2.0–4.0 Vrms`) | Neutral, natural, organic warmth |
+
+### 2. Class-D Stereo Amplifier Tiers (`<1 ms` Analog Current Boosters)
+
+* **Option 1 — Ultra-Budget Tier (`TI TPA3116`, ~£20–£39):** Found in compact 2-channel stereo amps such as the **Nobsound NS-01G Pro** or **Fosi Audio V1.0G** paired with a regulated `24V / 4A–5A` DC PSU. Delivers `~30–50W/ch` into `4 Ω`–`8 Ω` loads without fans or heat sinks. *(Ensure you select a 2-channel stereo model rather than a mono subwoofer amp like the Douk NS-03G.)*
+* **Option 2 — High-Headroom Tier (`TI TPA3255`, ~£65–£85):** Found in the **Fosi Audio TB10D** or **Aiyima A07** paired with a `32V–36V / 5A` PSU. Doubles unclipped dynamic headroom and increases damping factor for tighter bass control on lower-sensitivity speakers (`85 dB`) at higher volume levels.
+
+---
+
+## 🔊 Section 3: Passive Bookshelf Speakers (£99 – £219 / Pair)
+
+Passive speakers contain zero internal amplifiers, Bluetooth radios, or DSP chips—100% of your spend goes into rigid acoustic enclosures, precision crossovers, and drivers.
+
+| Model | Tier & UK Price | Impedance & Sensitivity | Frequency Range | Dimensions (`H×W×D`) | Complete Rig Cost (`TPA3116` / `TPA3255`) | Acoustic Character & `FLAC_AX` Synergy |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **JBL Control One** | Entry (£99) | `4 Ω` / `89 dB` | `80 Hz – 20 kHz` | `228 × 155 × 139 mm` | ~£180 / ~£215 | Punchy, bright, high-efficiency `89 dB` output; retro game SFX and synth leads jump out at low volume (`80 Hz` bass roll-off). |
+| **Wharfedale Diamond 9.0** | Entry (£99) | `6 Ω` / `86 dB` | `60 Hz – 24 kHz` | `236 × 145 × 165 mm` | ~£180 / ~£215 | Warm, smooth Kevlar midrange; front bass port avoids boominess when placed tight against a desk wall. |
+| **Fyne Audio F300i** | Compact (£179) | `8 Ω` / `87 dB` | `54 Hz – 34 kHz` | `250 × 156 × 211 mm` | ~£260 / ~£295 | Best compact all-rounder; easy `8 Ω` load lets Class-D amps grip bass down to `54 Hz` while titanium tweeters resolve DSD harmonics. |
+| **Q Acoustics 3010c** | Compact (£179) | `6 Ω` / `85 dB` | `60 Hz – 30 kHz` | `254 × 155 × 251 mm` | ~£260 / ~£295 | Airy, wide, fatigue-free stereo stage; pairs cleanly with FC3's full `2.04 Vrms` output (shines with `TPA3255` headroom). |
+| **Mission LX-1 MKII** | Compact (£184) | `8 Ω` / `86 dB` | `58 Hz – 20 kHz` | `260 × 160 × 208 mm` | ~£265 / ~£300 | Inverted driver geometry locks DVD dialogue and synth arpeggios pinpoint center. |
+| **Q Acoustics 3020c** | Standmount (£219) | `6 Ω` / `87 dB` | `60 Hz – 30 kHz` | `279 × 175 × 281 mm` | ~£300 / ~£335 | Larger `120 mm` C3 woofer + `+2 dB` sensitivity over 3010c brings effortless weight to symphonies, Schroeder reverb tails, and films. |
+| **Mission LX-2 MKII** | Standmount (£219) | `8 Ω` / `87 dB` | `55 Hz – 20 kHz` | `305 × 200 × 258 mm` | ~£300 / ~£335 | Full `5"` woofer (`55 Hz`) + `8 Ω` / `87 dB` efficiency delivers maximum bass slam and dynamic headroom. |
+
+---
+
+## 🎧 Section 4: Wired Headphones & IEMs (£16 – £329) — Direct from HiBy FC3
+
+Plugging wired headphones or in-ear monitors (IEMs) directly into the HiBy FC3 bypasses the Class-D speaker amplifier entirely, yielding **~1.5–2.00 ms deterministic latency** against a dead-silent noise floor.
+
+| Model | Tier & UK Price | Design & Weight | Impedance & Sensitivity | Frequency Range | Total Rig Cost (w/ FC3) | Acoustic Character & `FLAC_AX` Gain Note |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Moondrop Chu II / III** | Budget IEM (~£16–£21) | Closed IEM, Zinc Alloy (`6.4 g/ear`) | `18 Ω` / `119 dB` | `15 Hz – 38 kHz` | **~£50 – £65** | Crisp Al-Mg driver; buy the `3.5mm` cable version (not DSP) and run `--volume 0.20–0.25`. |
+| **Sennheiser HD400S** | Budget Closed (£59) | Closed-Back, Over-Ear (`217 g`) | `18 Ω` / `120 dB` | `18 Hz – 20 kHz` | ~£95 – £105 | Warm, bass-rich isolation; set `--volume 0.25`. |
+| **Beyerdynamic DJ 300 Pro X** | Studio Closed (£85) | Closed-Back, On/Over-Ear (`315 g`) | `48 Ω` / `109 dB` | `5 Hz – 35 kHz` | ~£120 – £130 | Visceral `5 Hz` sub-bass extension and `20 dB` passive isolation. |
+| **Austrian Audio Hi-X15** | Studio Closed (£89) | Closed-Back, Over-Ear (`255 g`) | `25 Ω` / `113 dB` | `12 Hz – 24 kHz` | ~£125 – £135 | Fast, punchy closed-back studio monitoring. |
+| **Sennheiser HD 560S** | Mid Reference (£99) | Open-Back, Over-Ear (`240 g`) | `120 Ω` / `110 dB` | `6 Hz – 38 kHz` | **~£135 – £145** | Reference-neutral, wide holographic stage; FC3's `2V` drives `120 Ω` effortlessly—best for mixing & FPS gaming. |
+| **Grado Classic SR60** | Mid Open-Back (£125) | Open-Back, On-Ear | `38 Ω` / `98 dB` | `20 Hz – 20 kHz` | ~£160 – £170 | Electric, airy, vocal-forward Brooklyn open-back sound. |
+| **Austrian Audio Hi-X20** | Mid Closed (£129) | Closed-Back, Over-Ear (`255 g`) | `25 Ω` / `113 dB` | `12 Hz – 24 kHz` | ~£165 – £175 | Refined closed-back clarity and deeper micro-detail. |
+| **Grado SR325 Classic** | Flagship Open (£329) | Open-Back, Machined Alloy (`280 g`) | `38 Ω` / `98 dB` | `~18 Hz – 24 kHz` | **~£365 – £375** | Flagship transient speed & DSD nuance via Signature Silver cable *(costs more than a complete £219 speaker rig)*. |
+
+---
+
+## 🛠️ Section 5: Curated Complete Builds
+
+| Build Tier | Exact Hardware Components | Total UK Cost | Acoustic & Latency Result |
+| :--- | :--- | :--- | :--- |
+| **Ultra-Budget Desk IEM Rig** | HiBy FC3 + Moondrop Chu II (`3.5mm`) (£16) | **~£50 – £60** | `~1.5–2 ms`; crisp, portable hi-res FLAC/DSD listening & retro gaming. |
+| **Best Entry Speaker Rig** | HiBy FC3 + Stereo `TPA3116` (`24V` PSU) + Wharfedale Diamond 9.0 (£99) | **~£180 – £195** | `~2–3 ms`; warm, fatigue-free sound ideal for shallow desks against a wall. |
+| **Best Compact Audiophile Rig** | HiBy FC3 + Stereo `TPA3116` (`24V` PSU) + Fyne Audio F300i (£179) | **~£260 – £275** | `~2–3 ms`; deep `54 Hz` bass + ideal `8 Ω` load for `DoP` DSD & `2.00 ms` synth jamming. |
+| **Best Premium Room-Filling Rig** | HiBy FC3 + `TPA3255` (Fosi TB10D / Aiyima A07) + Mission LX-2 MKII or Q Acoustics 3020c (£219) | **~£335 – £355** | `~2–3 ms`; maximum bass slam, clean headroom & cinema scale. |
+| **Best All-Round Headphone Rig** | HiBy FC3 + Sennheiser HD 560S (£99) *(or Austrian Audio Hi-X20 (£129) closed-back)* | **~£145 – £185** | `~1.5–2 ms`; reference-neutral FLAC/DSD monitoring & pinpoint FPS imaging. |
+| **Ultimate "Both Worlds" Rig** | HiBy FC3 + `TPA3116`/`TPA3255` + Fyne Audio F300i (£179) + Sennheiser HD 560S (£99) | **~£360 – £410** | Complete daytime hi-fi speaker rig + late-night reference open-back headphones. |
+
+---
+
+## 🔌 Section 6: Hardware Assembly & Gain-Staging Guide
+
+1. **Power Supply & Amp Safety:**
+   * Pair a `TPA3116` amp with a regulated `24V / 4A–5A` DC power supply (avoid weak `12V` bricks that clip bass transients).
+   * Pair a `TPA3255` amp (Fosi TB10D / Aiyima A07) with a `32V–36V / 5A` power supply for full dynamic headroom.
+   * Always turn the amp's physical volume knob all the way down before powering on.
+2. **Speaker Wiring & Placement:**
+   * Use `16 AWG` Oxygen-Free Copper (OFC) speaker wire (stripped `10 mm` or fitted with `4mm` banana plugs).
+   * Strictly match **Red (`+`) to Red (`+`)** and **Black (`–`) to Black (`–`)** on both amp and speakers—reversing polarity on one channel causes bass cancellation.
+   * Leave `10–15 cm` of breathing room behind rear-ported speakers (Q Acoustics 3020c, Mission LX-2 MKII) to prevent boomy bass reflections.
+3. **USB & Line-Level Interconnects:**
+   * Connect the HiBy FC3 (`VID 0x32BB`) to a motherboard USB port routed to your **Core 0 xHCI host controller** using a short, shielded USB-C cable.
+   * Run a snug, shielded `3.5mm-to-3.5mm` or `3.5mm-to-RCA` cable from the HiBy FC3 into the Class-D amp's input.
+4. **Safe Gain Staging:**
+   * **Speaker Mode:** Set `flac_ax --volume 0.80` (and HiBy FC3 hardware volume near maximum) so the DAC outputs a clean `~1.6–2.0 Vrms` signal, then control room volume solely via the amplifier's analog dial.
+   * **High-Impedance Open-Back Mode (`120 Ω` HD 560S):** Start at `--volume 0.65–0.80`.
+   * **High-Sensitivity IEM / Low-Impedance Mode (`16–18 Ω` Moondrop Chu II/III, Sennheiser HD400S):** Always drop to `--volume 0.20–0.25` before plugging in to protect your hearing and drivers.
+
+---
+
+## 🐧 Section 7: Universal Real-Time Linux (`6.12-rt` / Buildroot / Desktop) Setup
+
+This hardened configuration works identically across **bare-metal Buildroot/Batocera (`Piccolo [AX]`)** (SysVinit/eudev without systemd or WirePlumber) and **desktop Linux (`Ubuntu/Kubuntu 24.04+` or `piccolo-ax-desktop`)** (systemd + WirePlumber `0.5+`). It removes deprecated `nrpacks=1` kernel warnings, locks USB autosuspend off, prevents desktop audio servers from claiming the DAC, and uses group-safe runtime PID tracking with kernel ALSA subdevice drain checks.
+
+### 1. Universal `udev` Rules & Real-Time Limits
+
+Save this to `/etc/udev/rules.d/99-hiby-fc3-ax.rules` to grant the `audio` group `0660` ownership over both `/dev/snd/*` and raw USB nodes while locking USB autosuspend off (`power/control="on"`):
+
+```udev
+# /etc/udev/rules.d/99-hiby-fc3-ax.rules
+# 1. Prevent PulseAudio / legacy PipeWire ACP from claiming HiBy FC3 (VID 0x32BB)
+SUBSYSTEM=="sound", ATTRS{idVendor}=="32bb", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
+
+# 2. Disable USB autosuspend and grant audio group raw USB access
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="32bb", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
+```
+
+Remove any legacy `nrpacks=1` modprobe file (modern `6.12+` `snd-usb-audio` handles USB isochronous packet framing dynamically):
+
+```bash
+sudo rm -f /etc/modprobe.d/hiby-fc3-ax.conf
+```
+
+Configure real-time scheduling and unlimited locked RAM in `/etc/security/limits.d/99-flac-ax.conf` (for PAM-enabled desktops; bare-metal Buildroot/Batocera processes inherit RT privileges directly):
+
+```conf
+# /etc/security/limits.d/99-flac-ax.conf
+@audio   -  rtprio     95
+@audio   -  memlock    unlimited
+@audio   -  nice      -19
+```
+
+Apply and verify:
+
+```bash
+sudo usermod -aG audio "$USER"
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# Replug HiBy FC3 and verify USB autosuspend is locked "on" and group is "audio":
+grep -l "32bb" /sys/bus/usb/devices/*/idVendor | xargs -I{} dirname {} | xargs -I{} cat {}/power/control
+ls -l /dev/snd/pcmC*
+```
+
+### 2. WirePlumber `0.5+` Device Exclusion Rule (Desktop Linux Only)
+
+If PipeWire/WirePlumber is installed (`Ubuntu/Kubuntu` or `piccolo-ax-desktop`), block WirePlumber from opening `hw:CARD=FC3,DEV=0` by creating `/etc/wireplumber/wireplumber.conf.d/51-ignore-hiby-fc3.conf` *(skip this step on bare-metal Buildroot/Batocera)*:
+
+```hocon
+# /etc/wireplumber/wireplumber.conf.d/51-ignore-hiby-fc3.conf
+monitor.alsa.rules = [
+  {
+    matches = [
+      {
+        device.vendor.id = "0x32bb"
+      }
+    ]
+    actions = {
+      update-props = {
+        device.disabled = true
+      }
+    }
+  }
+]
+```
+
+Restart and verify WirePlumber no longer holds the device:
+
+```bash
+systemctl --user restart wireplumber
+wpctl status          # HiBy FC3 must NOT appear under Audio Devices
+fuser -v /dev/snd/*   # Must return empty for the FC3 card node
+```
+
+### 3. Universal Launcher & Switcher (`~/bin/ax-launch.sh`)
+
+Uses `$XDG_RUNTIME_DIR` on systemd desktops or a `0770` `/tmp/ax-runtime` directory on Buildroot/Batocera, validates paths and volume bounds before interrupting active playback, and polls `/proc/asound/cardX/pcm0p/sub0/status` until closed to eliminate ALSA `EBUSY` collisions:
+
+```bash
+#!/usr/bin/env bash
+# ~/bin/ax-launch.sh — Deterministic Core 0 launcher for HiBy FC3 (Buildroot & Desktop Linux)
+set -euo pipefail
+
+# Use systemd XDG_RUNTIME_DIR if available; otherwise create a group-shared dir in /tmp
+if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
+    RUNTIME_DIR="$XDG_RUNTIME_DIR"
+else
+    RUNTIME_DIR="/tmp/ax-runtime"
+    mkdir -p "$RUNTIME_DIR"
+    chmod 0770 "$RUNTIME_DIR" 2>/dev/null || true
+fi
+
+PIDFILE="${RUNTIME_DIR}/ax-dac.pid"
+DEVICE="hw:CARD=FC3,DEV=0"
+CARD_NAME="FC3"
+
+MODE="${1:-music}"
+VOL="${2:-0.80}"
+TARGET="${3:-}"
+
+usage() {
+    echo "Usage: $0 {music|synth|retro|dvd} [volume: 0.01-1.00] [album_dir_or_iso]" >&2
+    exit 1
+}
+
+# 1. Validate arguments BEFORE tearing down any active audio engine
+case "$MODE" in
+    music|dvd)
+        [[ -z "$TARGET" || ! -e "$TARGET" ]] && { echo "Error: Missing or invalid target path for $MODE." >&2; usage; }
+        ;;
+    synth|retro)
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+if ! awk -v v="$VOL" 'BEGIN { exit !(v > 0.0 && v <= 1.0) }'; then
+    echo "Error: Volume '$VOL' out of safe range (0.01 - 1.00)." >&2
+    exit 1
+fi
+
+# 2. Verify DAC presence before proceeding
+if ! grep -q "\[$CARD_NAME" /proc/asound/cards 2>/dev/null; then
+    echo "Error: HiBy FC3 ($DEVICE) not detected in /proc/asound/cards." >&2
+    exit 1
+fi
+
+# 3. Cleanly terminate previous engine and wait for ALSA PCM release
+if [[ -f "$PIDFILE" ]]; then
+    OLD_PID=$(cat "$PIDFILE" 2>/dev/null || true)
+    if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+        kill -TERM "$OLD_PID" 2>/dev/null || true
+        for _ in {1..100}; do
+            kill -0 "$OLD_PID" 2>/dev/null || break
+            sleep 0.01
+        done
+        if kill -0 "$OLD_PID" 2>/dev/null; then
+            kill -KILL "$OLD_PID" 2>/dev/null || true
+        fi
+    fi
+    rm -f "$PIDFILE"
+fi
+
+# Ensure kernel ALSA PCM subdevice is closed (avoids EBUSY on fast switch)
+CARD_NUM=$(awk -F'[][]' "/\[$CARD_NAME/ {print \$1}" /proc/asound/cards | tr -d ' ')
+if [[ -n "$CARD_NUM" && -f "/proc/asound/card${CARD_NUM}/pcm0p/sub0/status" ]]; then
+    for _ in {1..50}; do
+        grep -q "closed" "/proc/asound/card${CARD_NUM}/pcm0p/sub0/status" && break
+        sleep 0.01
+    done
+fi
+
+# 4. Cleanup trap to prevent stale PID files on exit
+CHILD_PID=""
+cleanup() {
+    if [[ -n "$CHILD_PID" ]] && kill -0 "$CHILD_PID" 2>/dev/null; then
+        kill -TERM "$CHILD_PID" 2>/dev/null || true
+        wait "$CHILD_PID" 2>/dev/null || true
+    fi
+    rm -f "$PIDFILE"
+}
+trap cleanup EXIT INT TERM
+
+# 5. Launch requested engine pinned to Core 0 (SCHED_FIFO 80)
+CMD=()
+case "$MODE" in
+    music)
+        CMD=(flac_ax --device "$DEVICE" --volume "$VOL" "$TARGET")
+        ;;
+    synth)
+        CMD=(ax_av_studio --device "$DEVICE" --volume "$VOL")
+        ;;
+    retro)
+        CMD=(ax_video_upscaler --mode retro --preset 1080p --device "$DEVICE" --volume "$VOL")
+        ;;
+    dvd)
+        CMD=(ax_video_upscaler --mode dvd --preset 2k --device "$DEVICE" --volume "$VOL" "$TARGET")
+        ;;
+esac
+
+chrt -f 80 taskset -c 0 "${CMD[@]}" &
+CHILD_PID=$!
+echo "$CHILD_PID" > "$PIDFILE"
+wait "$CHILD_PID"
+```
+
+Make executable and verify real-time pinning (`CLS=FF`, `RTPRIO=80`, `PSR=0`):
+
+```bash
+chmod +x ~/bin/ax-launch.sh
+
+# Example 1: Speakers (TPA3116/TPA3255) or Sennheiser HD 560S (120 Ohm)
+~/bin/ax-launch.sh music 0.80 ~/Music/FLAC_Album/
+
+# Example 2: Sensitive 16-18 Ohm IEMs/headphones (Moondrop Chu II/III, Sennheiser HD400S)
+~/bin/ax-launch.sh music 0.25 ~/Music/FLAC_Album/
+
+# Example 3: Instant handoff to 2.00 ms synth workstation & verify Core 0 SCHED_FIFO 80
+~/bin/ax-launch.sh synth 0.75 &
+ps -eLo pid,cls,rtprio,psr,comm | grep ax_av_studio
+```
+
+---
+
+## 🪟 Section 8: Windows 10/11 Fallback Setup (If Dual-Booting)
+
+If you boot into Windows 10/11 on the same machine, apply these settings to maintain `~1–3 ms` analog hardware latency and avoid OS DSP degradation:
+
+1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (and turn off Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.
+2. **Match Sample Rate / Use WASAPI Exclusive:** Under the *Advanced* tab, set default format to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies), or enable **WASAPI Exclusive Mode** in Foobar2000/MusicBee for bit-perfect output.
+3. **Gain Staging:** Keep Windows volume at **100%** when feeding your `TPA3116`/`TPA3255` speaker amp and adjust volume via the physical amp dial; drop Windows volume to **20–30%** before plugging in sensitive `16–18 Ω` IEMs/headphones (Moondrop Chu II/III, Sennheiser HD400S).
