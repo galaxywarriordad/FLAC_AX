@@ -1,6 +1,6 @@
 // src/studio_main.cpp — Unified [AX] Audio/Visual Synth, Mixer & Spectrum Studio
-// Topology: Core 5 (MPK Mini MK3 MIDI) -> Cores 2-4 (AVX2 DSP + FFT) -> Core 0 (ESS Sabre ALSA) & Core 1 (GTX 980 Ti HUD)
-#include "dsp/avx2_synth.hpp"
+// Topology: Core 5 (MPK Mini MK3 MIDI) -> Cores 2-4 (DSP Trio + FFT) -> Core 0 (ESS Sabre ALSA) & Core 1 (GTX 980 Ti HUD)
+#include "dsp/full_feature_synth.hpp"
 #include "ess_dac_hooks.hpp"
 #include "midi/mpk_mini3.hpp"
 #include "visual/av_hud.hpp"
@@ -220,8 +220,8 @@ int main(int argc, char** argv) {
     flac_ax::midi::MpkMini3Listener mpk_listener;
     mpk_listener.Start(5, midi_override);
 
-    // 2. Initialize DSP synth & shared telemetry
-    flac_ax::dsp::PolySynthEngine synth(actual_rate);
+    // 2. Initialize full-feature DSP trio synth & shared telemetry
+    flac_ax::dsp::FullFeatureSynthEngine synth(actual_rate);
     std::atomic<std::uint64_t> xrun_count{0};
     std::atomic<std::uint32_t> jitter_p99{0};
 
@@ -315,4 +315,6 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
+```[cite: 8, 10]
 
+<FollowUp label="Want me to draft the .dsf / .dff DoP container parser next?" query="Yes, write a clean .dsf and .dff header/stream parser in C++20 for DoP DSD64 and DSD128 playback."/>
