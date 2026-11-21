@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -42,6 +43,121 @@ struct ProfileMatrixCheck {
     std::string matched_cpu_profile;
     int audio_irq_core{0};
     int storage_aux_core{5};
+};
+
+struct DopPacker {
+    bool use_0x05{true};
+
+    // Packs two mono DSD payload words (16-bit big-endian per stereo channel) into
+    // alternating 0x05 / 0xFA DoP markers in the top byte of S32_LE frames
+    // (typically 176.4 kHz for DSD64 or 352.8 kHz for DSD128).
+    void PackStereoFrame(std::uint16_t dsd_l_be,
+                         std::uint16_t dsd_r_be,
+                         std::int32_t& out_l_s32,
+                         std::int32_t& out_r_s32) noexcept {
+        const std::uint32_t marker = use_0x05 ? 0x05000000U : 0xFA000000U;
+        use_0x05 = !use_0x05;
+
+        const std::uint32_t payload_l = (static_cast<std::uint32_t>(dsd_l_be & 0xFFFFU) << 8);
+        const std::uint32_t payload_r = (static_cast<std::uint32_t>(dsd_r_be & 0xFFFFU) << 8);
+
+        out_l_s32 = static_cast<std::int32_t>(marker | payload_l);
+        out_r_s32 = static_cast<std::int32_t>(marker | payload_r);
+    }
+
+    void Reset() noexcept {
+        use_0x05 = true;
+    }
+};
+
+class EssHardwareMixer {
+public:
+    EssHardwareMixer() = default;
+    ~EssHardwareMixer() { Close(); }
+
+    EssHardwareMixer(const EssHardwareMixer&) = delete;
+    EssHardwareMixer& operator=(const EssHardwareMixer&) = delete;
+
+    EssHardwareMixer(EssHardwareMixer&& other) noexcept
+        : mixer_(other.mixer_),
+          elem_(other.elem_),
+          min_vol_(other.min_vol_),
+          max_vol_(other.max_vol_) {
+        other.mixer_ = nullptr;
+        other.elem_ = nullptr;
+        other.min_vol_ = 0;
+        other.max_vol_ = 0;
+    }
+
+    EssHardwareMixer& operator=(EssHardwareMixer&& other) noexcept {
+        if (this != &other) {
+            Close();
+            mixer_ = other.mixer_;
+            elem_ = other.elem_;
+            min_vol_ = other.min_vol_;
+            max_vol_ = other.max_vol_;
+            other.mixer_ = nullptr;
+            other.elem_ = nullptr;
+            other.min_vol_ = 0;
+            other.max_vol_ = 0;
+        }
+        return *this;
+    }
+
+    bool Open(const char* card_name = "FC3") noexcept {
+        Close();
+        if (snd_mixer_open(&mixer_, 0) < 0) {
+            mixer_ = nullptr;
+            return false;
+        }
+        if (snd_mixer_attach(mixer_, card_name) < 0 ||
+            snd_mixer_selem_register(mixer_, nullptr, nullptr) < 0 ||
+            snd_mixer_load(mixer_) < 0) {
+            Close();
+            return false;
+        }
+
+        for (snd_mixer_elem_t* elem = snd_mixer_first_elem(mixer_);
+             elem != nullptr;
+             elem = snd_mixer_elem_next(elem)) {
+            if (snd_mixer_elem_get_type(elem) == SND_MIXER_ELEM_SIMPLE &&
+                snd_mixer_selem_is_active(elem) &&
+                snd_mixer_selem_has_playback_volume(elem)) {
+                elem_ = elem;
+                snd_mixer_selem_get_playback_volume_range(elem_, &min_vol_, &max_vol_);
+                return true;
+            }
+        }
+
+        Close();
+        return false;
+    }
+
+    bool SetNormalizedVolume(double norm_0_to_1) noexcept {
+        if (!elem_ || max_vol_ <= min_vol_) {
+            return false;
+        }
+        const double clamped = std::clamp(norm_0_to_1, 0.0, 1.0);
+        const long target = min_vol_ +
+            static_cast<long>(std::llround(clamped * static_cast<double>(max_vol_ - min_vol_)));
+        return snd_mixer_selem_set_playback_volume_all(elem_, target) >= 0;
+    }
+
+    void Close() noexcept {
+        if (mixer_) {
+            snd_mixer_close(mixer_);
+            mixer_ = nullptr;
+        }
+        elem_ = nullptr;
+        min_vol_ = 0;
+        max_vol_ = 0;
+    }
+
+private:
+    snd_mixer_t* mixer_{nullptr};
+    snd_mixer_elem_t* elem_{nullptr};
+    long min_vol_{0};
+    long max_vol_{0};
 };
 
 inline EssChipProfile MakeEssProfile(EssChipFamily family) noexcept {
@@ -103,8 +219,8 @@ inline unsigned int NegotiateEssRate(const EssChipProfile& chip, unsigned int st
     return std::clamp(stream_rate_hz, chip.min_rate_hz, chip.max_rate_hz);
 }
 
-// Scales buffer periods for ultra-high sample rates (192 kHz+) so hardware buffer duration
-// doesn't shrink below ~2 ms and risk USB bus jitter underruns.
+// Scales buffer periods for ultra-high sample rates (176.4 kHz+ / DSD DoP) so hardware
+// buffer duration doesn't shrink below ~2 ms and risk USB bus jitter underruns.
 inline unsigned int RecommendedBufferPeriods(const EssChipProfile& chip,
                                              unsigned int rate_hz,
                                              unsigned int user_override = 0) noexcept {
@@ -154,3 +270,6 @@ inline ProfileMatrixCheck CrossCheckHardwareProfiles(
 }
 
 } // namespace flac_ax::ess
+```[cite: 21, 22, 33]
+
+Would you like the full updated **`src/main.cpp`** or **`src/studio_main.cpp`** next to wire `EssHardwareMixer` and `DopPacker` into your playback or studio loops[cite: 21, 22, 31, 34]?
