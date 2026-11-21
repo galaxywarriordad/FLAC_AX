@@ -107,4 +107,4 @@ Under the hood, `ax_av_studio` chains **three purpose-built DSP engines** in ser
 
 ## 🏁 The Bottom Line
 
-You don’t need a £2,000 brushed-aluminum network streamer to hear what your hi-fi system is truly capable of, nor do you need a rack full of vintage studio hardware to feel zero-latency analog-style synthesis under your fingers. Pair a preserved multi-core PC with a £60 **HiBy FC3** (and an optional **Akai MPK Mini MK3**), and **FLAC_AX** turns everyday silicon into a dead-quiet audiophile transport and an expressive, stage-ready synthesizer rig.
+You don’t need a £2,000 brushed-aluminum network streamer to hear what your hi-fi system is truly capable of, nor do you need a rack full of vintage studio hardware to feel zero-latency analog-style synthesis under your fingers. Pair a preserved multi-core PC with a £35 **HiBy FC3** (and an optional **Akai MPK Mini MK3**), and **FLAC_AX** turns everyday silicon into a dead-quiet audiophile transport and an expressive, stage-ready synthesizer rig.
