@@ -3,6 +3,7 @@
 #include "dsp/full_feature_synth.hpp"
 #include "ess_dac_hooks.hpp"
 #include "midi/mpk_mini3.hpp"
+#include "midi/mpk_mini3_oled.hpp"
 #include "visual/av_hud.hpp"
 
 #include <alsa/asoundlib.h>
@@ -216,8 +217,9 @@ int main(int argc, char** argv) {
               << actual_rate << " Hz, period=" << actual_period << " frames ("
               << (static_cast<double>(actual_period) * 1000.0 / static_cast<double>(actual_rate)) << " ms)\n";
 
-    // 1. Start Core 5 (0x20) Akai MPK Mini MK3 RawMIDI listener
+    // 1. Start Core 5 (0x20) Akai MPK Mini MK3 RawMIDI listener + off-RT OLED feedback helper
     flac_ax::midi::MpkMini3Listener mpk_listener;
+    flac_ax::midi::MpkMini3OledFeedback oled_feedback;
     mpk_listener.Start(5, midi_override);
 
     // 2. Initialize full-feature DSP trio synth & shared telemetry
@@ -236,6 +238,10 @@ int main(int argc, char** argv) {
             const auto t0 = std::chrono::steady_clock::now();
 #endif
             while (mpk_listener.PopEvent(ev)) {
+                if (ev.type == flac_ax::midi::MidiMsgType::ControlChange &&
+                    ev.data1 >= 70U && ev.data1 <= 77U) {
+                    oled_feedback.NotifyKnobValue(static_cast<std::size_t>(ev.data1 - 70U), ev.data2);
+                }
                 synth.ProcessMidiEvent(ev);
             }
 
@@ -271,11 +277,13 @@ int main(int argc, char** argv) {
         }
     });
 
-    // 4. Run Core 1 (0x02) VBlank-locked GTX 980 Ti OpenGL Studio HUD on main thread
+    // 4. Run Core 1 (0x02) VBlank-locked GTX 980 Ti OpenGL Studio HUD + off-RT OLED flush on main thread
     if (!headless) {
         flac_ax::visual::AvStudioHud hud;
         if (hud.Init(1, fullscreen)) {
             while (g_running.load(std::memory_order_acquire)) {
+                oled_feedback.PollAndFlush(mpk_listener.active_device());
+
                 flac_ax::visual::StudioTelemetry telem{};
                 telem.sample_rate_hz = actual_rate;
                 telem.period_frames = static_cast<unsigned int>(actual_period);
@@ -293,7 +301,8 @@ int main(int argc, char** argv) {
         }
     } else {
         while (g_running.load(std::memory_order_acquire)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            oled_feedback.PollAndFlush(mpk_listener.active_device());
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
         }
     }
 
@@ -302,6 +311,7 @@ int main(int argc, char** argv) {
         audio_thread.join();
     }
     mpk_listener.Stop();
+    oled_feedback.Close();
 
     snd_pcm_drop(pcm);
     snd_pcm_close(pcm);
@@ -315,4 +325,3 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
-
