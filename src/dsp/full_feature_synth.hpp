@@ -1,8 +1,10 @@
-// src/dsp/full_feature_synth.hpp — Zero-dependency full-interface test synth for ax_av_studio
-// Exercises 16-voice synth + 16-pad percussion, K1..K8, pitch/mod/sustain, 256-sample scope, and 64-band FFT
+// src/dsp/full_feature_synth.hpp — Zero-dependency full-interface test synth trio for ax_av_studio
+// Integrates FullFeatureSynthEngine + StereoReverbDsp + TapeDelayDsp with zero RT allocations
 #pragma once
 
-#include "dsp/avx2_synth.hpp" // VisualSnapshot
+#include "dsp/avx2_synth.hpp"      // VisualSnapshot
+#include "dsp/stereo_reverb_dsp.hpp"
+#include "dsp/tape_delay_dsp.hpp"
 #include "midi/mpk_mini3.hpp"
 
 #include <algorithm>
@@ -23,15 +25,28 @@ public:
     static constexpr std::size_t kFftSize = 1024;
     static constexpr std::size_t kHalfBins = kFftSize / 2;
 
-    explicit FullFeatureSynthEngine(unsigned int sample_rate_hz = 48000) {
+    explicit FullFeatureSynthEngine(unsigned int sample_rate_hz = 48000)
+        : reverb_(sample_rate_hz), delay_(sample_rate_hz) {
         InitLookupTables();
         SetSampleRate(sample_rate_hz);
+        reverb_.SetRoomSize(0.55f);
+        reverb_.SetDamping(0.30f);
+        reverb_.SetMix(0.18f);
+        delay_.SetDelayMs(240.0f);
+        delay_.SetFeedback(0.42f);
+        delay_.SetToneDamping(0.35f);
+        delay_.SetMix(0.15f);
     }
 
     void SetSampleRate(unsigned int sample_rate_hz) noexcept {
         sample_rate_ = static_cast<float>(sample_rate_hz > 0U ? sample_rate_hz : 48000U);
         inv_sample_rate_ = 1.0f / sample_rate_;
+        reverb_.SetSampleRate(sample_rate_hz);
+        delay_.SetSampleRate(sample_rate_hz);
     }
+
+    StereoReverbDsp& reverb() noexcept { return reverb_; }
+    TapeDelayDsp& delay() noexcept { return delay_; }
 
     void ProcessMidiEvent(const midi::MidiEvent& ev) noexcept {
         switch (ev.type) {
@@ -93,11 +108,20 @@ public:
                     case 75U: // K6: Harmonic drive
                         drive_ = 1.0f + 3.5f * norm;
                         break;
-                    case 76U: // K7: Stereo chorus spread
+                    case 76U: // K7: Stereo chorus spread + subtle reverb blend
                         chorus_depth_ = norm;
+                        reverb_.SetMix(0.08f + 0.32f * norm);
                         break;
                     case 77U: // K8: Master output gain
                         master_gain_ = norm;
+                        break;
+                    case 78U: // Optional CC 78: Reverb mix & room size
+                        reverb_.SetMix(norm * 0.75f);
+                        reverb_.SetRoomSize(norm);
+                        break;
+                    case 79U: // Optional CC 79: Tape delay mix & feedback
+                        delay_.SetMix(norm * 0.75f);
+                        delay_.SetFeedback(0.15f + 0.65f * norm);
                         break;
                     default:
                         break;
@@ -110,7 +134,7 @@ public:
         }
     }
 
-    // Zero-allocation real-time audio + scope + 64-band FFT tap
+    // Zero-allocation real-time audio + reverb + delay + scope + 64-band FFT tap
     void RenderInterleavedS32(std::int32_t* out_interleaved_lr, std::size_t frame_count) noexcept {
         const float attack_step = 1.0f / std::max(1.0f, attack_sec_ * sample_rate_);
         const float release_step = 1.0f / std::max(1.0f, release_sec_ * sample_rate_);
@@ -192,7 +216,7 @@ public:
                 mix_r += amp * pan;
             }
 
-            // 8 polyphonic drum/pad voices (pitched membrane + Xorshift32 noise burst)
+            // 8 polyphonic drum/pad voices
             for (std::size_t di = 0; di < kMaxDrumVoices; ++di) {
                 DrumVoice& d = drums_[di];
                 if (!d.active) {
@@ -238,8 +262,14 @@ public:
             svf_bp_r_ += f * hp_r;
             svf_lp_r_ += f * svf_bp_r_;
 
-            const float out_l = FastSoftClip(svf_lp_l_ * master_gain_);
-            const float out_r = FastSoftClip(svf_lp_r_ * master_gain_);
+            // DSP trio spatial & echo chain: StereoReverbDsp -> TapeDelayDsp -> Master Gain
+            float proc_l = svf_lp_l_;
+            float proc_r = svf_lp_r_;
+            reverb_.ProcessStereo(proc_l, proc_r);
+            delay_.ProcessStereo(proc_l, proc_r);
+
+            const float out_l = FastSoftClip(proc_l * master_gain_);
+            const float out_r = FastSoftClip(proc_r * master_gain_);
 
             out_interleaved_lr[n * 2 + 0] = FloatToS32(out_l);
             out_interleaved_lr[n * 2 + 1] = FloatToS32(out_r);
@@ -499,6 +529,9 @@ private:
     std::array<DrumVoice, kMaxDrumVoices> drums_{};
     std::size_t next_drum_rr_{0};
     std::uint32_t noise_rng_{0x9E3779B9U};
+
+    StereoReverbDsp reverb_;
+    TapeDelayDsp delay_;
 
     // K1..K8 (CC 70..77) + Thumbstick + Sustain
     float cutoff_norm_{0.75f};
