@@ -315,6 +315,4 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
-```[cite: 21, 22, 31, 33, 42]
 
-With `ess_dac_hooks.hpp`, `main.cpp`, and `studio_main.cpp` all aligned on the audio path, you're in a great spot to test the `FLAC_AX` build in the browser/VM or add the Buildroot package (`batocera-ax-external/package/flac-ax/`) with `VID 0x32BB` USB autosuspend disabled[cite: 1, 21, 22].
