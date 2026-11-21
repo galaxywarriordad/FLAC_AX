@@ -325,6 +325,3 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
-```[cite: 8, 10]
-
-Next up in your logical sequence is **#5**: updating `CMakeLists.txt` for all new headers (`full_feature_synth.hpp`, `stereo_reverb_dsp.hpp`, `tape_delay_dsp.hpp`, `dsd_dop_reader.hpp`, `mpk_mini3_oled.hpp`) and adding the bare-metal `Piccolo [AX]` packaging + `VID 0x32BB` udev rule (`nrpacks=1`, USB autosuspend disabled)[cite: 12, 13]. Ready when you are.
