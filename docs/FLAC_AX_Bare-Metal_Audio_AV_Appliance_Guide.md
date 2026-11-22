@@ -222,24 +222,31 @@ This hardened configuration works identically across **bare-metal Buildroot/Bato
 
 First, plug in your DAC and confirm its Vendor/Product IDs via `lsusb` (HiBy FC3 is `32bb:0002` / `32bb:*`; TRN Black Pearl `CB5100` bridges typically enumerate under `1a86:*` or `3302:*`—verify with `lsusb` and adjust if needed).
 
-Save to `/etc/udev/rules.d/99-hiby-fc3-ax.rules` (or `/userdata/system/udev/rules.d/` on `Piccolo [AX]`):
+Save to `/etc/udev/rules.d/99-ax-usb-dacs.rules` (installed automatically by `Piccolo-AX` when `BR2_PACKAGE_FLAC_AX_USB_DAC_RULES=y`):
 
 ```udev
-# /etc/udev/rules.d/99-hiby-fc3-ax.rules
-# 1. Prevent PulseAudio / legacy PipeWire ACP from claiming HiBy FC3 (VID 0x32BB)
+# /etc/udev/rules.d/99-ax-usb-dacs.rules
+# 1. Sound Subsystem: Bypass PulseAudio / PipeWire ACP & set audio permissions
 SUBSYSTEM=="sound", ATTRS{idVendor}=="32bb", ATTR{id}="FC3", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="2fc6", ATTR{id}="FC3", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="2972", ATTR{id}="KA11", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="3302", ATTR{id}="BLACKPEARL", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="1a86", ATTR{id}="BLACKPEARL", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="2fc6", ATTRS{product}=="*Dawn*", ATTR{id}="DAWNPRO2", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
+SUBSYSTEM=="sound", ATTRS{idVendor}=="05ac", ATTR{id}="APPLEDAC", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
 
-# 2. Disable USB autosuspend and grant audio group raw USB access
+# 2. USB Subsystem: Lock power/control="on" (zero autosuspend) for Core 0 IRQ
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="32bb", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
-
-# 3. Optional: Neat Bumblebee (VID 0x0C76 / PID 0x1617)
-SUBSYSTEM=="sound", ATTRS{idVendor}=="0c76", ATTRS{idProduct}=="1617", ATTR{id}="BUMBLEBEE", GROUP="audio", MODE="0660"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2fc6", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2972", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="3302", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
+ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
 ```
 
 &nbsp;
 
 Remove any deprecated `nrpacks=1` modprobe file on `6.12+` kernels and configure PAM real-time limits in `/etc/security/limits.d/99-flac-ax.conf`:
-
 ```sh
 sudo rm -f /etc/modprobe.d/hiby-fc3-ax.conf
 ```
@@ -397,7 +404,7 @@ case "$MODE" in
         CMD=(ax_video_upscaler --mode retro --preset 1080p --device "$DEVICE" --volume "$VOL")
         ;;
     dvd)
-        CMD=(ax_video_upscaler --mode dvd --preset 2k --device "$DEVICE" --volume "$VOL" "$TARGET")
+        CMD=(ax_video_upscaler --mode dvd --preset 2k --input "$TARGET" --device "$DEVICE" --volume "$VOL")
         ;;
 esac
 
