@@ -43,7 +43,7 @@ sh
 ```
 sudo apt-get update && sudo apt-get install -y --no-install-recommends \
   cmake ninja-build pkg-config \
-  libflac++-dev libasound2-dev libsdl2-dev libgl1-mesa-dev
+  libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev
 ```
 
 Use code with caution.
@@ -96,14 +96,17 @@ sh
 # 5. Sensitive IEMs (16–32 Ohm, e.g., Moondrop Chu II / Truthear Hexa)
 ./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.22 ~/Music/FLAC_Album/*.flac
 
-# 6. Live 2.00 ms AV Synthesizer & OpenGL Studio HUD (Akai MPK Mini MK3)
-./build/ax_av_studio --fullscreen --device hw:CARD=FC3,DEV=0 --volume 0.80
+# 6. Amiga / Atari ST Tracker Modules (.mod/.xm/.s3m/.it) via libopenmpt -> S32_LE
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.80 --mod-stereo 75 ~/Music/Amiga/*.mod
 
-# 7. Single-Stream Retro HDMI Capture Upscaler (MacroSilicon MS2130S -> 1080p Bob) & DVD 2K Upscaler
+# 7. Live 2.00 ms AV Synthesizer & OpenGL Studio HUD (+ Lock-Free 24-bit WAV Bounce)
+./build/ax_av_studio --fullscreen --record ~/Music/jam.wav --device hw:CARD=FC3,DEV=0 --volume 0.80
+
+# 8. Single-Stream Retro HDMI Capture Upscaler (MacroSilicon MS2130S -> 1080p Bob) & DVD 2K Upscaler
 ./build/ax_video_upscaler --mode retro --preset 1080p --v4l2 /dev/video0 --scan bob --device hw:CARD=FC3,DEV=0 --volume 0.80
 ./build/ax_video_upscaler --mode dvd --preset 2k --input /userdata/dvd/movie.iso --scan dvd --device hw:CARD=FC3,DEV=0 --volume 0.80
 
-# 8. Core 5 Coffee/Espresso Appliance TUI Launcher
+# 9. Core 5 Coffee/Espresso Appliance TUI Launcher
 ./build/ax_appliance_tui
 ```
 
