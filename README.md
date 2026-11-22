@@ -46,8 +46,6 @@ sudo apt-get update && sudo apt-get install -y --no-install-recommends \
   libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev
 ```
 
-Use code with caution.
-
 Configure & Compile (`-j 4` L3 Cache Discipline)
 
 sh
@@ -66,9 +64,7 @@ cmake -S . -B build -G Ninja \
 ninja -C build -j 4
 ```
 
-Use code with caution.
-
-*(Note: When `ax-sdk` is not pre-installed locally via `AX_SDK_DIR` or `../ax-sdk`, CMake automatically fetches `ax-sdk` tag `v1_36_1` via `FetchContent`.)*
+*(Note: When `ax-sdk` is not pre-installed locally via `AX_SDK_DIR` or `../ax-sdk`, CMake automatically fetches `ax-sdk` tag `v1_36_2` via `FetchContent`.)*
 
 ---
 
@@ -126,16 +122,17 @@ Use code with caution.
 
 ---
 
-## 🌐 6\. Silicon Preservation Society Ecosystem
+## 🌐 6. Silicon Preservation Society Ecosystem
 
-* `Piccolo-AX` — Deterministic Buildroot / `Linux 6.12-rt` bare-metal console & A/V appliance image (`batocera-ax-external`).  
-* `piccolo-ax-desktop` — Optional on-demand C/C++ LXQt/X11 desktop workbench (`< 42 MB` budget) with Coffee/Espresso theming.  
-* `ax-sdk` — Shared dependency-free C++20 deterministic hardware runtime (`v1_36_1`).
+* [`Piccolo-AX`](https://github.com) — Deterministic Buildroot / `Linux 6.12-rt` bare-metal `x86_64` console & A/V appliance image (`batocera-ax-external`).
+* [`Piccolo_2go`](https://github.com) — Deterministic Buildroot `aarch64` (`RK3326` `1:2:1`) retro handheld OS for **BATLEXP G350** & **R36S**.
+* [`piccolo-ax-desktop`](https://github.com-desktop) — Optional on-demand C/C++ LXQt/X11 desktop workbench (`< 42 MB` budget).
+* [`Amiberry-AX`](https://github.com) — Deterministic Commodore Amiga 500 / 1200 / CD32 engine linked against `ax-sdk`.
+* [`ax-sdk`](https://github.com) — Shared dependency-free C++20 deterministic hardware runtime (`v1_36_2`).
 
 ---
 
 ## 📄 7\. License
 
 Released under the MIT License.
-
 &nbsp;
