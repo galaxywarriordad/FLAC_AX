@@ -1,9 +1,9 @@
-# 🎛️ Piccolo \[AX\] & FLAC_AX — Complete Bare-Metal Audio, AV & Hardware Master Guide (UK)
+# 🎛️ Piccolo [AX] & FLAC_AX — Complete Bare-Metal Audio, AV & Hardware Master Guide (UK)
 
 **Target System:** Bare-Metal Audio, Realtime Synth (`2.00 ms`) & Retro/DVD AV Appliance  
 **Hardware Stack:** HiBy FC3 (`VID 0x32BB`, ESS Sabre `ES9281AC Pro`) or TRN Black Pearl (Dual-Mono `CS43131` + Hardware PEQ) + Class-D Stereo Amp + Passive/Active Hi-Fi Speakers / Wired Headphones / 2-in-1 DSP IEMs  
 **Runtime Platform:** Real-Time Linux (`6.12-rt` / `Piccolo [AX]`) & Desktop Linux (`Ubuntu/Kubuntu 24.04+`) + Windows 10/11 Fallback  
-**Total System Cost:** **~£45 – £614** (End-to-end deterministic hardware latency: **1.5 – 3.0 ms**)
+**Total System Cost:** **~£45 – £617** (End-to-end deterministic hardware latency: **1.5 – 3.0 ms**)
 
 Pairing **`FLAC_AX`** on real-time Linux (`6.12-rt` / `Piccolo [AX]`) with a modular **£29–£35 reference USB-C DAC** (**HiBy FC3** or **TRN Black Pearl**), a **Class-D stereo amplifier**, and **passive hi-fi speakers** or **wired headphones/IEMs** transforms an ordinary `x86_64` PC into a deterministic, sub-2 ms bare-metal audio appliance—delivering bit-perfect 32-bit PCM/DSD playback, a `2.00 ms` hardware-feel synth workstation, and sample-clock-locked retro/DVD upscaling.
 
@@ -131,15 +131,15 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 
 ## 🔊 Section 4: Loudspeakers (UK Market — Richer Sounds & Active Pro)
 
-| Tier & Model | UK Price | Impedance / Sensitivity | Freq. Range & Size (`H×W×D`) | Port & Acoustic Design | Best Piccolo \[AX\] Pairing & Character |
+| Tier & Model | UK Price | Impedance / Sensitivity | Freq. Range & Size (`H×W×D`) | Port & Acoustic Design | Best Piccolo [AX] Pairing & Character |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1A. Wharfedale Diamond 9.0** | **~£99** | `6 Ω` / `86 dB` | `60 Hz – 24 kHz`<br>`236 × 145 × 165 mm` | **Front-firing bass reflex** | **Nobsound NS-20G (19V–24V PSU).** Warm, smooth Kevlar midrange; front port allows placement flush against a shallow desk wall without bass boom. |
-| **1B. JBL Control One** | **~£99** | `4–8 Ω` / `89 dB` | `80 Hz – 20 kHz`<br>`228 × 155 × 139 mm` | Front / Compact Studio (+ desk/wall brackets) | **Nobsound NS-20G (19V–24V PSU).** High `89 dB` efficiency; retro game SFX and synth leads jump out cleanly at low volume. |
+| **1A. Wharfedale Diamond 9.0** | **~£99** | `6 Ω` / `86 dB` | `60 Hz – 24 kHz`<br>`236 × 145 × 165 mm` | **Front-firing bass reflex** | **Nobsound NS-20G (`19V–20V`).** Warm, smooth Kevlar midrange; front port allows placement flush against a shallow desk wall without bass boom. |
+| **1B. JBL Control One** | **~£99** | `4–8 Ω` / `89 dB` | `80 Hz – 20 kHz`<br>`228 × 155 × 139 mm` | Front / Compact Studio (+ desk/wall brackets) | **Nobsound NS-20G (`19V–20V`).** High `89 dB` efficiency; retro game SFX and synth leads jump out cleanly at low volume. |
 | **2. Q Acoustics 3010i / 3010c** | **~£119 / £179** | `6 Ω` / `85–86 dB` | `60 Hz – 30 kHz`<br>`254 × 155 × 251 mm` | Rear port (foam bungs included) | **Stereo TPA3116 (`24V` PSU).** Narrow `150–155 mm` front baffle projects a wide, fatigue-free 3D desktop stereo stage. |
 | **3. Wharfedale Diamond 220** | **~£149** | `8 Ω` (`4.1 Ω` min) / `86 dB` | `56 Hz – 20 kHz`<br>`315 × 174 × 255 mm` | **Downward-firing slot port** | **Stereo TPA3116 (`24V` PSU).** Vents through calibrated plinth gap to prevent rear-wall boom; reference acoustic neutrality. |
 | **4. Fyne Audio F300i** | **~£179** | `8 Ω` / `87 dB` | `54 Hz – 34 kHz`<br>`250 × 156 × 211 mm` | Rear port | **Stereo TPA3116 (`24V` PSU).** Easy `8 Ω` load grips bass down to `54 Hz` while titanium tweeters resolve DSD harmonics. |
 | **5. Mission LX-1 MKII** | **~£184** | `8 Ω` (`4.4 Ω` min) / `86 dB` | `58 Hz – 20 kHz`<br>`260 × 160 × 208 mm` | Rear port + **Inverted Driver Geometry** | **Stereo TPA3116 (`24V` PSU).** Tweeter mounted *below* woofer equalizes acoustic path lengths at seated ear height for pinpoint vocals/dialogue. |
-| **6. Q Acoustics 3020c / Mission LX-2 MKII** | **~£219** | `6–8 Ω` / `87 dB` | `55–60 Hz – 30 kHz`<br>Larger `5"` Standmount | Rear port (`120–130 mm` woofer) | **Stereo TPA3116 (`24V/5A` PSU).** Full-bodied bass slam, symphonic weight, and maximum dynamic headroom. |
+| **6. Q Acoustics 3020c / Mission LX-2 MKII** | **~£219** | `6–8 Ω` / `87 dB` | `55–60 Hz – 30 kHz`<br>Larger `5"` Standmount | Rear port (`120–130 mm` woofer) | **Stereo TPA3116 (`24V` PSU).** Full-bodied bass slam, symphonic weight, and maximum nearfield dynamic headroom. |
 | **Pro. Wharfedale Pro Diamond Studio (5-BT / 7-BT)** | **~£199–£269** | Active Bi-Amped (`60W–100W` RMS) | `45–50 Hz – 20 kHz` | Front-ported studio monitor | **Direct from HiBy FC3 / TRN Black Pearl (`2.0 Vrms`).** Built-in discrete LF/HF Class-D amps with RCA/TRS/XLR inputs; skips external amp and speaker wire. |
 
 ---
@@ -180,15 +180,14 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 3. **Rear-Wall Boundary Control:** Leave `15–25 cm` behind rear-ported speakers (Q Acoustics 3010i/3020c, Mission LX-1/LX-2 MKII) or insert the included **foam port bungs** (or choose the front-ported **Wharfedale Diamond 9.0** / downward-ported **Diamond 220**).
 4. **Solving the Bare-Metal Room-EQ Paradox (TRN Black Pearl Hardware PEQ):** Because bare-metal `flac_ax` bypasses all host-side software DSP to preserve bit-exact `S32_LE`/DoP delivery, DACs without on-board DSP (like the HiBy FC3) rely strictly on physical placement. With the **TRN Black Pearl**, you can save subtractive parametric EQ directly into the DAC's on-board flash via a web browser (`-2.5` to `-4.0 dB` at `100–140 Hz`, `Q=2.0` for rear-wall boom; `-2.0` to `-3.0 dB` at `220–320 Hz`, `Q=2.5` for desk bounce; or a `+2 dB` `2.5–3.5 kHz` vocal lift for cinema)—retaining bit-perfect host transport with **zero software DSP latency**.
 
-### 6.2 Speaker Cable Options (Pre-Terminated & Bulk OFC)
+### 6.2 Pre-Terminated Speaker Cabling (`£6.45` Budget Bundle)
 
-* **Ready-Made Plug-and-Play Option (`2pcs/1Pair HiFi RCA to 2 Banana Speaker Cable`, `£6.45`):**
-  * **High-Quality HiFi Audio Connection:** Delivers clear, distortion-free audio transmission for your amplifier setup, ensuring reliable signal transfer between devices.
-  * **Compatible with Standard Speaker Systems:** Ideal for connecting amplifiers to speakers using RCA to Banana/Speakon-style speaker inputs, supporting seamless integration with standard home audio equipment. *(Note: Verify your amplifier's speaker output jack type—use RCA-to-Banana if your amp features RCA speaker output jacks, or dual-banana/bare-wire ends for standard 4 mm binding posts.)*
-  * **Multiple Length Options Available:** Available in `0.5m`, `1m`, `1.5m`, `2m`, and `3m` lengths to match nearfield desk spacing without excess slack.
-  * **Compact & Durable Design:** Sturdy yet flexible `4.0 mm` outer diameter jacket supplied in protective polybag packaging for tangle-free routing.
-  * **Simple & Efficient Stereo Bundle:** Supplied as a matched `1Pair` (`2pcs`) stereo bundle for left and right channels out of the box.
-* **Custom-Length Pure OFC + 4 mm Banana Plugs (~£17–£30):** If cutting custom lengths for standard 5-way binding posts, use pure **16 AWG (`1.3 mm²`) to 14 AWG (`2.0 mm²`) Oxygen-Free Copper (OFC)**—such as **QED Classic 42** (`~£1.70/m`) or **QED XT25** (`~£5.99/m`)—terminated with **gold-plated 4 mm banana plugs** (`~£12` for 8×) so stray copper whiskers cannot bridge tightly spaced mini-amp terminals. Always match **Red (`+`) to Red (`+`)** and **Black (`–`) to Black (`–`)**.
+* **2pcs/1Pair HiFi RCA to 2 Banana Speaker Cable for Amplifier (`£6.45`):**
+  * **High-Quality HiFi Audio Connection:** Delivers clear, distortion-free audio transmission for your amplifier setup, engineered for reliable signal transfer between devices.
+  * **Compatible with Standard Speaker Systems:** Connects amplifiers with RCA speaker outputs (such as compact mini-amps) to standard 4 mm banana binding-post speakers without bare-wire stripping or stray copper strands. *(Note: Only use RCA-to-banana speaker cables on amplifiers whose speaker terminals are explicitly wired as speaker-level RCA jacks; for standard 4 mm binding-post amps like the Nobsound NS-20G, use dual-banana to dual-banana OFC speaker cables and strictly match **Red `+` to Red `+`** and **Black `–` to Black `–`**.)*
+  * **Multiple Length Options Available:** Available in `0.5 m`, `1 m`, `1.5 m`, `2 m`, and `3 m` lengths to match nearfield desk runs cleanly and minimize excess loop length.
+  * **Compact & Durable Design:** Sturdy yet flexible `4.0 mm` outer jacket supplied in protective tangle-free polybag packaging.
+  * **Simple & Efficient Setup:** Supplied as a matched stereo pair (`2 pcs` for Left and Right channels) for plug-and-play installation.
 
 ### 6.3 Gain-Staging Summary
 
@@ -203,11 +202,11 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 | System Tier | USB Front-End (`Piccolo [AX]`) | Class-D Amp & PSU | Speakers + Personal Audio | Cabling & Isolation | Approx. Total |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **0. Desk IEM Starter** | **TRN Black Pearl (`£29.18`)** *or* HiBy FC3 (`£29.67`) | *None (Direct from DAC)* | **Moondrop Chu II (`3.5mm`)** (`£16–£19`) | *Included* | **~£45 – £49** |
-| **1. Ultra-Budget Rig** | **TRN Black Pearl (`£29.18`)** *or* HiBy FC3 (`£29.67`) | Nobsound NS-20G (`£35`) + 19V/4.74A Laptop PSU (`£15`) | **Wharfedale Diamond 9.0** (`£99`) *or* **JBL Control One** (`£99`) + **Chu II** (`£19`) or **Koss Porta Pro** (`£39`) | 1Pair HiFi RCA-to-2 Banana Speaker Cable (`£6.45`) | **~£204 – £224** |
-| **2. Compact Audiophile** | HiBy FC3 w/ Display (`£35`) *or* TRN Black Pearl (`£29.18`) | Stereo `TPA3116` + 24V PSU (`~£45`) | **Fyne Audio F300i** (`£179`) | 1Pair HiFi RCA-to-2 Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£272 – £278** |
-| **3. Sweet-Spot Hi-Fi** | **TRN Black Pearl (`£29.18`)** *(Hardware Room-EQ + Mic)* | Stereo `TPA3116` + 24V PSU (`~£45`) | **Q Acoustics 3010i** (`£119`) + **Austrian Audio Hi-X15** (`£89`) *or* **Grado SR80x** (`£119`) | 1Pair HiFi RCA-to-2 Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£301 – £331** |
-| **4. Reference Studio** | **TRN Black Pearl (`£29.18`)** *or* HiBy FC3 w/ Display (`£35`) | Stereo `TPA3116` + 24V PSU (`~£45`) | **Wharfedale Diamond 220** (`£149`) *or* **Mission LX-1 MKII** (`£184`) + **Sennheiser HD 560S** (`£99`) | 1Pair HiFi RCA-to-2 Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£341 – £382** |
-| **5. Ultimate Head-Fi & Room** | **TRN Black Pearl (`£29.18`, 320 mW Bal)** *or* HiBy FC3 (`£35`) | Stereo `TPA3116` + 24V/5A PSU (`~£45`) *(or Active Wharfedale Pro £229)* | **Mission LX-2 MKII** (`£219`) *or* **Q Acoustics 3020c** (`£219`) + **Grado SR325x** (`£299`) | 1Pair HiFi RCA-to-2 Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£611 – £617** |
+| **1. Ultra-Budget Rig** | **TRN Black Pearl (`£29.18`)** *or* HiBy FC3 (`£29.67`) | Nobsound NS-20G (`£35`) + 19V/4.74A Laptop PSU (`£15`) | **Wharfedale Diamond 9.0** (`£99`) *or* **JBL Control One** (`£99`) + **Chu II** (`£19`) or **Koss Porta Pro** (`£39`) | 1Pair HiFi Banana Speaker Cable (`£6.45`) | **~£204 – £225** |
+| **2. Compact Audiophile** | HiBy FC3 w/ Display (`£35`) *or* TRN Black Pearl (`£29.18`) | Stereo `TPA3116` + 24V PSU (`~£45`) | **Fyne Audio F300i** (`£179`) | 1Pair HiFi Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£272 – £278** |
+| **3. Sweet-Spot Hi-Fi** | **TRN Black Pearl (`£29.18`)** *(Hardware Room-EQ + Mic)* | Stereo `TPA3116` + 24V PSU (`~£45`) | **Q Acoustics 3010i** (`£119`) + **Austrian Audio Hi-X15** (`£89`) *or* **Grado SR80x** (`£119`) | 1Pair HiFi Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£301 – £331** |
+| **4. Reference Studio** | **TRN Black Pearl (`£29.18`)** *or* HiBy FC3 w/ Display (`£35`) | Stereo `TPA3116` + 24V PSU (`~£45`) | **Wharfedale Diamond 220** (`£149`) *or* **Mission LX-1 MKII** (`£184`) + **Sennheiser HD 560S** (`£99`) | 1Pair HiFi Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£341 – £382** |
+| **5. Ultimate Head-Fi & Room** | **TRN Black Pearl (`£29.18`, 320 mW Bal)** *or* HiBy FC3 (`£35`) | Stereo `TPA3116` + 24V PSU (`~£45`) *(or Active Wharfedale Pro £229)* | **Mission LX-2 MKII** (`£219`) *or* **Q Acoustics 3020c** (`£219`) + **Grado SR325x** (`£299`) | 1Pair HiFi Banana Speaker Cable (`£6.45`) + Foam Pads (`£12`) | **~£611 – £617** |
 
 ---
 
