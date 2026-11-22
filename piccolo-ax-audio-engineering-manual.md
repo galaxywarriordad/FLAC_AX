@@ -390,14 +390,35 @@ ps -eLo pid,cls,rtprio,psr,comm | grep ax_av_studio
 ```
 
 ---
-
-## 🪟 Section 9: Windows 10/11 Dual-Boot Fallback Setup
-
-1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (plus disable Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.
-2. **Match Sample Rate / WASAPI Exclusive:** Set default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies), or enable **WASAPI Exclusive Mode** in Foobar2000/MusicBee.
-3. **Gain Staging:** Keep Windows volume at **100%** when feeding a `TPA3116`/`TPA3255` speaker amp and adjust volume via the physical amp dial; drop Windows volume to **20–30%** before plugging in sensitive `16–18 Ω` IEMs/headphones.
 ## 🪟 Section 9: Windows 10/11 Dual-Boot Fallback Setup
 
 1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (plus disable Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.
 2. **Match Sample Rate / Exclusive Bit-Exact Mode:** Set the default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies). For bit-perfect, bypass-mixer playback, use **ASIO** (`FlexASIO` in Exclusive mode targeting the HiBy FC3 `VID 0x32BB`) or **WASAPI Exclusive Mode** in Foobar2000 / MusicBee / `flac_ax`.
 3. **Gain Staging:** Keep Windows master volume at **100%** when feeding a `TPA3116` speaker amplifier and control listening level solely via the physical amp dial; drop Windows volume to **20–30%** before plugging in sensitive `16–18 Ω` IEMs or headphones.
+
+### 9.1 Ready-to-Copy `FlexASIO.toml` (HiBy FC3 WASAPI Exclusive)
+
+Save this configuration to `%USERPROFILE%\FlexASIO.toml` so ASIO-capable players (`flac_ax`, `Eden-Espresso-Wave-AX`, Foobar2000) bypass the Windows audio mixer at low latency:
+
+```toml
+# %USERPROFILE%\FlexASIO.toml — Bit-perfect WASAPI Exclusive profile for HiBy FC3
+backend = "Windows WASAPI"
+bufferSizeSamples = 128
+
+[input]
+device = ""
+
+[output]
+# Match the exact Windows Sound Control Panel playback device name for your HiBy FC3
+device = "Speakers (HiBy FC3)"
+wasapiExclusiveMode = true
+wasapiAutoConvert = false
+suggestedLatencySeconds = 0.003
+```
+
+*Verification:* Open the `FlexASIO` GUI or run `FlexASIOUtil`—confirm the active output reports `WASAPI Exclusive` at `32-bit` / `24-bit` integer without sample-rate conversion (`wasapiAutoConvert = false`).
+<ElicitationsGroup message="If you'd like to extend Section 9 or merge this into your guide files:">
+  <Elicitation label="Add USB selective suspend fix" query="Add a step in Section 9 for disabling Windows USB selective suspend on the HiBy FC3."/>
+  <Elicitation label="Update full guide file" query="Generate the updated FLAC_AX Bare-Metal Audio & AV Appliance Guide.md with this new Section 9 included."/>
+  <Elicitation label="Tune buffer for 2.00 ms" query="Show how to adjust FlexASIO.toml bufferSizeSamples for 2.00 ms latency at 48 kHz vs 44.1 kHz."/>
+</ElicitationsGroup>
