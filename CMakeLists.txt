@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_36_1)" ON)
 option(FLAC_AX_BUILD_AV_STUDIO "Build ax_av_studio (MPK Mini MK3 + AVX2 Synth + A/V HUD)" ON)
 option(FLAC_AX_BUILD_VIDEO_UPSCALER "Build single-stream 720p/1080p/2K DVD & V4L2 retro upscaler (ax_video_upscaler)" ON)
+option(FLAC_AX_BUILD_APPLIANCE_TUI "Build Core 5 Espresso Real-Time Appliance TUI (ax_appliance_tui)" ON)
 option(FLAC_AX_ENABLE_SDL2_GL "Enable SDL2 + OpenGL window output when available" ON)
 option(FLAC_AX_SKYLAKE_ARCH "Target Skylake microarchitecture (-march=skylake / /arch:AVX2)" ON)
 option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (LLVM LTO / IPO) in Release builds" ON)
@@ -77,6 +78,10 @@ set(FLAC_AX_VIDEO_HEADERS
     src/video/v4l2_live_capture.hpp
     src/video/upscale_720p_shader.hpp
     src/video/av_pts_sync.hpp
+)
+
+set(FLAC_AX_TUI_HEADERS
+    src/tui/appliance_tui.hpp
 )
 
 function(flac_ax_apply_target_flags target_name)
@@ -157,7 +162,7 @@ endif()
 # --- 3. Single-Stream 720p/1080p/2K DVD & V4L2 Retro Upscaler ---
 if(FLAC_AX_BUILD_VIDEO_UPSCALER)
     add_executable(ax_video_upscaler
-        src/video_upscaler_main.cpp
+        src/video/video_upscaler_main.cpp
         ${FLAC_AX_VIDEO_HEADERS}
     )
     flac_ax_apply_target_flags(ax_video_upscaler)
@@ -168,6 +173,15 @@ if(FLAC_AX_BUILD_VIDEO_UPSCALER)
             target_compile_definitions(ax_video_upscaler PRIVATE FLAC_AX_HAS_SDL2_GL=1)
         endif()
     endif()
+endif()
+
+# --- 4. Core 5 Espresso Real-Time Appliance Launcher TUI ---
+if(UNIX AND NOT APPLE AND FLAC_AX_BUILD_APPLIANCE_TUI)
+    add_executable(ax_appliance_tui
+        src/appliance_tui_main.cpp
+        ${FLAC_AX_TUI_HEADERS}
+    )
+    flac_ax_apply_target_flags(ax_appliance_tui)
 endif()
 
 if(FLAC_AX_ENABLE_LTO)
@@ -181,8 +195,8 @@ if(FLAC_AX_ENABLE_LTO)
         if(TARGET ax_video_upscaler)
             set_property(TARGET ax_video_upscaler PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
         endif()
+        if(TARGET ax_appliance_tui)
+            set_property(TARGET ax_appliance_tui PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+        endif()
     endif()
 endif()
-```[cite: 16, 43, 59]
-
-Where would you like to go next—another file in `FLAC_AX` or one of your other `[AX]` repositories?
