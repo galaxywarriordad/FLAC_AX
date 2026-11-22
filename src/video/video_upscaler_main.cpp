@@ -1,4 +1,4 @@
-// src/video_upscaler_main.cpp — Single-stream 720p/1080p/2K DVD & Retro Capture Runner for FLAC_AX
+// src/video/video_upscaler_main.cpp — Single-stream 720p/1080p/2K DVD & Retro Capture Runner for FLAC_AX
 // Topology: Core 5 (V4L2 / Stream I/O) -> Core 1 (Shader Pacing & Upscale) -> Core 0 (SCHED_FIFO 80 ESS Sabre ALSA)
 #include "video/av_pts_sync.hpp"
 #include "video/ax_720p_hw_gate.hpp"
@@ -21,7 +21,9 @@
 #endif
 
 #if defined(FLAC_AX_HAS_SDL2_GL)
+#define GL_GLEXT_PROTOTYPES 1
 #include <GL/gl.h>
+#include <GL/glext.h>
 #include <SDL.h>
 #endif
 
@@ -164,12 +166,61 @@ bool ConfigureUpscalerAlsa(snd_pcm_t* pcm,
 }
 #endif
 
+#if defined(FLAC_AX_HAS_SDL2_GL)
+constexpr const char* kFullscreenTriangleVertexShader = R"GLSL(
+#version 330 core
+out vec2 v_uv;
+void main() {
+    vec2 pos = vec2((gl_VertexID == 1) ? 3.0 : -1.0,
+                    (gl_VertexID == 2) ? 3.0 : -1.0);
+    v_uv = vec2(0.5 * (pos.x + 1.0), 0.5 * (1.0 - pos.y));
+    gl_Position = vec4(pos, 0.0, 1.0);
+}
+)GLSL";
+
+GLuint CompileShaderStage(GLenum stage, const char* src, GLsizei len) noexcept {
+    GLuint shader = glCreateShader(stage);
+    if (shader == 0U) {
+        return 0U;
+    }
+    glShaderSource(shader, 1, &src, &len);
+    glCompileShader(shader);
+    GLint ok = GL_FALSE;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    if (ok != GL_TRUE) {
+        char log[512]{};
+        glGetShaderInfoLog(shader, static_cast<GLsizei>(sizeof(log)), nullptr, log);
+        std::cerr << "[UPSCALER] GL shader compile failed: " << log << "\n";
+        glDeleteShader(shader);
+        return 0U;
+    }
+    return shader;
+}
+#endif
+
 struct Core1UpscaleStage {
     OutputPreset preset{"720p", ax::video::kTargetWidth720p, ax::video::kTargetHeight720p};
     ax::video::Upscale720pParams params{};
+    std::vector<std::uint8_t> y_plane;
+    std::vector<std::uint8_t> uv_plane;
+
 #if defined(FLAC_AX_HAS_SDL2_GL)
     SDL_Window* window{nullptr};
     SDL_GLContext gl_ctx{nullptr};
+    GLuint program{0U};
+    GLuint vao{0U};
+    GLuint tex_y{0U};
+    GLuint tex_uv{0U};
+    std::uint32_t tex_w{0U};
+    std::uint32_t tex_h{0U};
+    GLint loc_y_tex{-1};
+    GLint loc_uv_tex{-1};
+    GLint loc_src_size{-1};
+    GLint loc_dst_size{-1};
+    GLint loc_scan_mode{-1};
+    GLint loc_field_parity{-1};
+    GLint loc_anti_ringing{-1};
+    GLint loc_dither_amp{-1};
     bool gl_ready{false};
 #endif
 
@@ -209,6 +260,63 @@ struct Core1UpscaleStage {
             return false;
         }
         (void)SDL_GL_SetSwapInterval(1);
+
+        const GLuint vs = CompileShaderStage(
+            GL_VERTEX_SHADER,
+            kFullscreenTriangleVertexShader,
+            static_cast<GLsizei>(std::char_traits<char>::length(kFullscreenTriangleVertexShader)));
+        const GLuint fs = CompileShaderStage(
+            GL_FRAGMENT_SHADER,
+            ax::video::kUpscale720pFragmentShader.data(),
+            static_cast<GLsizei>(ax::video::kUpscale720pFragmentShader.size()));
+
+        if (vs == 0U || fs == 0U) {
+            if (vs != 0U) glDeleteShader(vs);
+            if (fs != 0U) glDeleteShader(fs);
+            Shutdown();
+            return false;
+        }
+
+        program = glCreateProgram();
+        glAttachShader(program, vs);
+        glAttachShader(program, fs);
+        glLinkProgram(program);
+        glDeleteShader(vs);
+        glDeleteShader(fs);
+
+        GLint linked = GL_FALSE;
+        glGetProgramiv(program, GL_LINK_STATUS, &linked);
+        if (linked != GL_TRUE) {
+            char log[512]{};
+            glGetProgramInfoLog(program, static_cast<GLsizei>(sizeof(log)), nullptr, log);
+            std::cerr << "[UPSCALER] GL program link failed: " << log << "\n";
+            Shutdown();
+            return false;
+        }
+
+        loc_y_tex        = glGetUniformLocation(program, "u_y_tex");
+        loc_uv_tex       = glGetUniformLocation(program, "u_uv_tex");
+        loc_src_size     = glGetUniformLocation(program, "u_src_size");
+        loc_dst_size     = glGetUniformLocation(program, "u_dst_size");
+        loc_scan_mode    = glGetUniformLocation(program, "u_scan_mode");
+        loc_field_parity = glGetUniformLocation(program, "u_field_parity");
+        loc_anti_ringing = glGetUniformLocation(program, "u_anti_ringing");
+        loc_dither_amp   = glGetUniformLocation(program, "u_dither_amp");
+
+        glGenVertexArrays(1, &vao);
+        glGenTextures(1, &tex_y);
+        glGenTextures(1, &tex_uv);
+
+        for (GLuint tex : {tex_y, tex_uv}) {
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        }
+        glBindTexture(GL_TEXTURE_2D, 0U);
+
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glViewport(0, 0, static_cast<GLsizei>(preset.width), static_cast<GLsizei>(preset.height));
         gl_ready = true;
         return true;
@@ -218,28 +326,154 @@ struct Core1UpscaleStage {
 #endif
     }
 
+    void PreparePlanarPlanes(std::uint32_t w,
+                             std::uint32_t h,
+                             const std::uint8_t* yuyv_data,
+                             std::size_t yuyv_bytes,
+                             std::uint32_t stride,
+                             std::uint64_t frame_seq) {
+        const std::size_t luma_pixels = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+        const std::uint32_t uv_w = std::max(1U, w / 2U);
+        const std::size_t uv_bytes = static_cast<std::size_t>(uv_w) * static_cast<std::size_t>(h) * 2U;
+
+        if (y_plane.size() != luma_pixels) {
+            y_plane.assign(luma_pixels, 16U);
+        }
+        if (uv_plane.size() != uv_bytes) {
+            uv_plane.assign(uv_bytes, 128U);
+        }
+
+        const std::uint32_t row_bytes = (stride >= w * 2U) ? stride : (w * 2U);
+        if (yuyv_data != nullptr && yuyv_bytes >= static_cast<std::size_t>(row_bytes) * h) {
+            for (std::uint32_t row = 0U; row < h; ++row) {
+                const std::uint8_t* src_row = yuyv_data + static_cast<std::size_t>(row) * row_bytes;
+                std::uint8_t* dst_y = y_plane.data() + static_cast<std::size_t>(row) * w;
+                std::uint8_t* dst_uv = uv_plane.data() + static_cast<std::size_t>(row) * uv_w * 2U;
+
+                for (std::uint32_t pair = 0U; pair < uv_w; ++pair) {
+                    const std::size_t s = static_cast<std::size_t>(pair) * 4U;
+                    dst_y[pair * 2U + 0U]  = src_row[s + 0U]; // Y0
+                    dst_uv[pair * 2U + 0U] = src_row[s + 1U]; // U (Cb)
+                    dst_y[pair * 2U + 1U]  = src_row[s + 2U]; // Y1
+                    dst_uv[pair * 2U + 1U] = src_row[s + 3U]; // V (Cr)
+                }
+            }
+            return;
+        }
+
+        // Fallback test-card ramp when running DVD/synthetic pacing without V4L2 payload
+        const std::uint8_t phase = static_cast<std::uint8_t>(frame_seq & 0xFFULL);
+        for (std::uint32_t row = 0U; row < h; ++row) {
+            std::uint8_t* dst_y = y_plane.data() + static_cast<std::size_t>(row) * w;
+            std::uint8_t* dst_uv = uv_plane.data() + static_cast<std::size_t>(row) * uv_w * 2U;
+            const auto luma_val = static_cast<std::uint8_t>(24U + ((row * 180U) / std::max(1U, h)));
+            std::fill(dst_y, dst_y + w, luma_val);
+            for (std::uint32_t pair = 0U; pair < uv_w; ++pair) {
+                dst_uv[pair * 2U + 0U] = static_cast<std::uint8_t>(96U + ((pair + phase) & 0x3FU));
+                dst_uv[pair * 2U + 1U] = static_cast<std::uint8_t>(144U - ((pair + phase) & 0x1FU));
+            }
+        }
+    }
+
     void RenderFrame(std::uint32_t src_w,
                      std::uint32_t src_h,
-                     std::uint64_t frame_seq) noexcept {
+                     std::uint64_t frame_seq,
+                     const std::uint8_t* yuyv_data = nullptr,
+                     std::size_t yuyv_bytes = 0U,
+                     std::uint32_t stride = 0U) {
         params.is_pal_576 = (src_h == 576U);
         const int field_parity = static_cast<int>(frame_seq & 1ULL);
         const int scan_mode_int = static_cast<int>(params.scan_mode);
-        (void)src_w;
-        (void)field_parity;
-        (void)scan_mode_int;
-        (void)ax::video::kUpscale720pFragmentShader;
 
 #if defined(FLAC_AX_HAS_SDL2_GL)
-        if (gl_ready && window) {
-            glClearColor(0.03f, 0.04f, 0.06f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
-            SDL_GL_SwapWindow(window);
+        if (!gl_ready || !window) {
+            return;
         }
+
+        SDL_Event ev;
+        while (SDL_PollEvent(&ev) != 0) {
+            if (ev.type == SDL_QUIT ||
+                (ev.type == SDL_KEYDOWN && ev.key.keysym.sym == SDLK_ESCAPE)) {
+                g_running.store(false, std::memory_order_release);
+                return;
+            }
+        }
+
+        PreparePlanarPlanes(src_w, src_h, yuyv_data, yuyv_bytes, stride, frame_seq);
+        const std::uint32_t uv_w = std::max(1U, src_w / 2U);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, tex_y);
+        if (tex_w != src_w || tex_h != src_h) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8,
+                         static_cast<GLsizei>(src_w), static_cast<GLsizei>(src_h),
+                         0, GL_RED, GL_UNSIGNED_BYTE, y_plane.data());
+        } else {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                            static_cast<GLsizei>(src_w), static_cast<GLsizei>(src_h),
+                            GL_RED, GL_UNSIGNED_BYTE, y_plane.data());
+        }
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, tex_uv);
+        if (tex_w != src_w || tex_h != src_h) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RG8,
+                         static_cast<GLsizei>(uv_w), static_cast<GLsizei>(src_h),
+                         0, GL_RG, GL_UNSIGNED_BYTE, uv_plane.data());
+            tex_w = src_w;
+            tex_h = src_h;
+        } else {
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0,
+                            static_cast<GLsizei>(uv_w), static_cast<GLsizei>(src_h),
+                            GL_RG, GL_UNSIGNED_BYTE, uv_plane.data());
+        }
+
+        glViewport(0, 0, static_cast<GLsizei>(preset.width), static_cast<GLsizei>(preset.height));
+        glUseProgram(program);
+
+        if (loc_y_tex >= 0)        glUniform1i(loc_y_tex, 0);
+        if (loc_uv_tex >= 0)       glUniform1i(loc_uv_tex, 1);
+        if (loc_src_size >= 0)     glUniform2f(loc_src_size, static_cast<float>(src_w), static_cast<float>(src_h));
+        if (loc_dst_size >= 0)     glUniform2f(loc_dst_size, static_cast<float>(preset.width), static_cast<float>(preset.height));
+        if (loc_scan_mode >= 0)    glUniform1i(loc_scan_mode, scan_mode_int);
+        if (loc_field_parity >= 0) glUniform1i(loc_field_parity, field_parity);
+        if (loc_anti_ringing >= 0) glUniform1f(loc_anti_ringing, params.anti_ringing_strength);
+        if (loc_dither_amp >= 0)   glUniform1f(loc_dither_amp, params.dither_amplitude);
+
+        glBindVertexArray(vao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        glBindVertexArray(0U);
+        glUseProgram(0U);
+
+        SDL_GL_SwapWindow(window);
+#else
+        (void)src_w;
+        (void)yuyv_data;
+        (void)yuyv_bytes;
+        (void)stride;
+        (void)field_parity;
+        (void)scan_mode_int;
 #endif
     }
 
     void Shutdown() noexcept {
 #if defined(FLAC_AX_HAS_SDL2_GL)
+        if (tex_y != 0U) {
+            glDeleteTextures(1, &tex_y);
+            tex_y = 0U;
+        }
+        if (tex_uv != 0U) {
+            glDeleteTextures(1, &tex_uv);
+            tex_uv = 0U;
+        }
+        if (vao != 0U) {
+            glDeleteVertexArrays(1, &vao);
+            vao = 0U;
+        }
+        if (program != 0U) {
+            glDeleteProgram(program);
+            program = 0U;
+        }
         if (gl_ctx) {
             SDL_GL_DeleteContext(gl_ctx);
             gl_ctx = nullptr;
@@ -252,6 +486,8 @@ struct Core1UpscaleStage {
             SDL_Quit();
             gl_ready = false;
         }
+        tex_w = 0U;
+        tex_h = 0U;
 #endif
     }
 };
@@ -453,8 +689,10 @@ int main(int argc, char** argv) {
             ::close(lock_fd);
             return 1;
         }
+        src_w = v4l2_source.width();
+        src_h = v4l2_source.height();
         std::cout << "[UPSCALER] V4L2 capture active on " << v4l2_dev << " ("
-                  << v4l2_source.width() << "x" << v4l2_source.height() << ")\n";
+                  << src_w << "x" << src_h << ")\n";
     } else {
         std::cout << "[UPSCALER] DVD single-stream mode initialized (input='"
                   << (dvd_input.empty() ? "<stdin/title>" : dvd_input) << "')\n";
@@ -545,27 +783,34 @@ int main(int argc, char** argv) {
             if (frame_pts_us <= master_us + frame_step_us) {
                 have_frame = true;
                 ++synthetic_frame_idx;
+                ++last_seq;
             }
         }
 #else
         const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
                                     std::chrono::steady_clock::now() - last_report)
                                     .count();
-        frame_pts_us = synthetic_frame_idx * frame_step_us;
-        if (frame_pts_us <= elapsed_us + frame_step_us) {
-            have_frame = true;
-            ++synthetic_frame_idx;
-            ++last_seq;
-        }
-#endif
-
         if (have_frame) {
             const auto decision = pts_sync.EvaluateVideoFrame(frame_pts_us);
             if (decision.action == ax::video::FramePacingAction::HoldEarly && decision.hold_us > 0) {
                 std::this_thread::sleep_for(std::chrono::microseconds(decision.hold_us));
             }
             if (decision.action != ax::video::FramePacingAction::DropLate) {
+#if !defined(_WIN32)
+                if (mode == RunnerMode::Retro &&
+                    latest_frame.format == ax::video::CapturePixelFormat::Yuyv422) {
+                    stage.RenderFrame(latest_frame.width,
+                                      latest_frame.height,
+                                      last_seq,
+                                      latest_frame.payload.data(),
+                                      latest_frame.payload.size(),
+                                      latest_frame.bytes_per_line);
+                } else {
+                    stage.RenderFrame(src_w, src_h, last_seq);
+                }
+#else
                 stage.RenderFrame(src_w, src_h, last_seq);
+#endif
             }
         } else {
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -604,4 +849,3 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
-
