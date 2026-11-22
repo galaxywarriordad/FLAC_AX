@@ -8,6 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_36_1)" ON)
 option(FLAC_AX_BUILD_AV_STUDIO "Build ax_av_studio (MPK Mini MK3 + AVX2 Synth + A/V HUD)" ON)
 option(FLAC_AX_BUILD_VIDEO_UPSCALER "Build single-stream 720p/1080p/2K DVD & V4L2 retro upscaler (ax_video_upscaler)" ON)
+option(FLAC_AX_ENABLE_SDL2_GL "Enable SDL2 + OpenGL window output when available" ON)
 option(FLAC_AX_SKYLAKE_ARCH "Target Skylake microarchitecture (-march=skylake / /arch:AVX2)" ON)
 option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (LLVM LTO / IPO) in Release builds" ON)
 
@@ -17,7 +18,19 @@ if(UNIX AND NOT APPLE)
     pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 endif()
 
+set(_flac_ax_has_sdl2_gl FALSE)
+if(UNIX AND NOT APPLE AND FLAC_AX_ENABLE_SDL2_GL)
+    pkg_check_modules(_FLAC_AX_SDL2 QUIET IMPORTED_TARGET sdl2)
+    find_package(OpenGL QUIET)
+    if(_FLAC_AX_SDL2_FOUND AND TARGET OpenGL::GL)
+        set(_flac_ax_has_sdl2_gl TRUE)
+    endif()
+endif()
+
 if(FLAC_AX_USE_AX_SDK)
+    if(NOT TARGET ax::core)
+        find_package(ax-sdk CONFIG QUIET)
+    endif()
     if(NOT TARGET ax::core)
         if(NOT DEFINED FETCHCONTENT_SOURCE_DIR_AX_SDK)
             if(DEFINED ENV{AX_SDK_DIR} AND EXISTS "$ENV{AX_SDK_DIR}/CMakeLists.txt")
@@ -117,7 +130,7 @@ endif()
 
 # --- 2. Unified [AX] Audio/Visual Synth, Mixer & Spectrum Studio ---
 if(FLAC_AX_BUILD_AV_STUDIO)
-    if(UNIX AND NOT APPLE)
+    if(UNIX AND NOT APPLE AND NOT _flac_ax_has_sdl2_gl)
         pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
         find_package(OpenGL REQUIRED)
     endif()
@@ -137,6 +150,7 @@ if(FLAC_AX_BUILD_AV_STUDIO)
             PkgConfig::SDL2
             OpenGL::GL
         )
+        target_compile_definitions(ax_av_studio PRIVATE FLAC_AX_HAS_SDL2_GL=1)
     endif()
 endif()
 
@@ -149,6 +163,10 @@ if(FLAC_AX_BUILD_VIDEO_UPSCALER)
     flac_ax_apply_target_flags(ax_video_upscaler)
     if(UNIX AND NOT APPLE)
         target_link_libraries(ax_video_upscaler PRIVATE PkgConfig::ALSA)
+        if(_flac_ax_has_sdl2_gl)
+            target_link_libraries(ax_video_upscaler PRIVATE PkgConfig::SDL2 OpenGL::GL)
+            target_compile_definitions(ax_video_upscaler PRIVATE FLAC_AX_HAS_SDL2_GL=1)
+        endif()
     endif()
 endif()
 
@@ -165,10 +183,6 @@ if(FLAC_AX_ENABLE_LTO)
         endif()
     endif()
 endif()
-```[cite: 16]
+```[cite: 16, 43, 59]
 
-<ElicitationsGroup message="Ready for #3 of 5 — shall we do Eden-Espresso-Wave-AX next?">
-  <Elicitation label="3. Eden CMake" query="next"/>
-  <Elicitation label="4. Generation-X CMake" query="Give me the cleaned, 100% ready CMakeLists.txt for Generation-X-AX next."/>
-  <Elicitation label="5. Cemu-Latte CMake" query="Give me the cleaned, 100% ready CMakeLists.txt for Cemu-Latte-AX next."/>
-</ElicitationsGroup>
+Where would you like to go next—another file in `FLAC_AX` or one of your other `[AX]` repositories?
