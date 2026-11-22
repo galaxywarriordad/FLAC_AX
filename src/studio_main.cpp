@@ -1,5 +1,6 @@
 // src/studio_main.cpp — Unified [AX] Audio/Visual Synth, Mixer & Spectrum Studio
-// Topology: Core 5 (MPK Mini MK3 MIDI) -> Cores 2-4 (DSP Trio + FFT) -> Core 0 (ESS Sabre ALSA) & Core 1 (GTX 980 Ti HUD)
+// Topology: Core 5 (MPK Mini MK3 MIDI & WAV Bounce) -> Cores 2-4 (DSP Trio + FFT) -> Core 0 (ESS Sabre ALSA) & Core 1 (GTX 980 Ti HUD)
+#include "audio/wav_bounce_recorder.hpp"
 #include "dsp/full_feature_synth.hpp"
 #include "ess_dac_hooks.hpp"
 #include "midi/mpk_mini3.hpp"
@@ -134,6 +135,8 @@ void PrintUsage() {
               << "  --mixer-card <card>      ALSA mixer card for hw volume (default: FC3)\n"
               << "  --volume <0.0..1.0>      Set ESS hardware mixer playback level\n"
               << "  --midi <rawmidi_dev>     Explicit ALSA RawMIDI device (default: auto-detect)\n"
+              << "  --record <path.wav>      Lock-free PCM WAV bounce capture (for MilkyTracker/mhWaveEdit)\n"
+              << "  --record-bits <24|32>    WAV bounce bit depth (default: 24)\n"
               << "  --rate <hz>              Target sample rate (default: 48000)\n"
               << "  --period <frames>        ALSA period frames (default: 96)\n";
 }
@@ -148,6 +151,8 @@ int main(int argc, char** argv) {
     std::string device_override;
     std::string mixer_card = "FC3";
     std::string midi_override;
+    std::string record_wav_path;
+    std::uint32_t record_bits = 24U;
     std::uint32_t sample_rate = 48000U;
     std::uint32_t period_frames_u32 = 96U; // 2.00 ms @ 48 kHz
 
@@ -169,6 +174,13 @@ int main(int argc, char** argv) {
             has_volume = true;
         } else if (arg == "--midi" && i + 1 < argc) {
             midi_override = argv[++i];
+        } else if (arg == "--record" && i + 1 < argc) {
+            record_wav_path = argv[++i];
+        } else if (arg == "--record-bits" && i + 1 < argc) {
+            if (!ParseUint32(argv[++i], record_bits) || (record_bits != 24U && record_bits != 32U)) {
+                PrintUsage();
+                return 1;
+            }
         } else if (arg == "--rate" && i + 1 < argc) {
             if (!ParseUint32(argv[++i], sample_rate) || sample_rate == 0U) {
                 PrintUsage();
@@ -254,6 +266,16 @@ int main(int argc, char** argv) {
               << actual_rate << " Hz, period=" << actual_period << " frames ("
               << (static_cast<double>(actual_period) * 1000.0 / static_cast<double>(actual_rate)) << " ms)\n";
 
+    flac_ax::audio::WavBounceRecorder wav_recorder;
+    if (!record_wav_path.empty()) {
+        if (wav_recorder.Open(record_wav_path, actual_rate, record_bits)) {
+            std::cout << "[STUDIO] Lock-free WAV bounce armed -> '" << record_wav_path
+                      << "' (" << record_bits << "-bit PCM @ " << actual_rate << " Hz)\n";
+        } else {
+            std::cerr << "[STUDIO] WARN: Failed to open WAV bounce path '" << record_wav_path << "'\n";
+        }
+    }
+
     // 1. Start Core 5 (0x20) Akai MPK Mini MK3 RawMIDI listener + off-RT OLED feedback helper
     flac_ax::midi::MpkMini3Listener mpk_listener;
     flac_ax::midi::MpkMini3OledFeedback oled_feedback;
@@ -283,6 +305,7 @@ int main(int argc, char** argv) {
             }
 
             synth.RenderInterleavedS32(period_buf.data(), actual_period);
+            wav_recorder.PushFromRtThread(period_buf.data(), actual_period);
 
             std::size_t offset = 0;
             while (offset < actual_period && g_running.load(std::memory_order_acquire)) {
@@ -314,7 +337,18 @@ int main(int argc, char** argv) {
         }
     });
 
-    // 4. Run Core 1 (0x02) VBlank-locked GTX 980 Ti OpenGL Studio HUD + off-RT OLED flush on main thread
+    // 4. Off-RT disk drain thread pinned to Core 5 (0x20) when WAV bounce recording is active
+    std::thread bounce_thread([&]() {
+        PinThread(5, 0);
+        while (g_running.load(std::memory_order_acquire)) {
+            if (wav_recorder.is_active()) {
+                (void)wav_recorder.DrainToDisk();
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    });
+
+    // 5. Run Core 1 (0x02) VBlank-locked GTX 980 Ti OpenGL Studio HUD + off-RT OLED flush on main thread
     if (!headless) {
         flac_ax::visual::AvStudioHud hud;
         if (hud.Init(1, fullscreen)) {
@@ -347,6 +381,17 @@ int main(int argc, char** argv) {
     if (audio_thread.joinable()) {
         audio_thread.join();
     }
+    if (bounce_thread.joinable()) {
+        bounce_thread.join();
+    }
+    if (wav_recorder.is_active()) {
+        const auto total_frames = wav_recorder.frames_written();
+        const auto overruns = wav_recorder.overrun_frames();
+        wav_recorder.Close();
+        std::cout << "[STUDIO] WAV bounce saved -> '" << record_wav_path
+                  << "' (" << total_frames << " frames, overruns=" << overruns << ")\n";
+    }
+
     mpk_listener.Stop();
     oled_feedback.Close();
 
@@ -362,3 +407,4 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
+
