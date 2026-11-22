@@ -30,7 +30,9 @@ Stripping away the OS audio server and active speaker DSP puts **75% to 85% of y
 | :---- | :---- | :---- |
 | **Bit-Perfect Hi-Fi Player** | `flac_ax` | RAM-locked (`mlockall`) lossless FLAC (`32-bit/384kHz`) and native `DoP` DSD64/128 playback directly to `hw:CARD=FC3` / `BLACKPEARL` at `1.5–2.00 ms`. |
 | **Hardware-Feel Synthesizer** | `ax_av_studio` | 16-voice polyphonic subtractive synth, 8-voice percussion, stereo Schroeder reverb, and ping-pong tape echo at `96 samples` (`2.00 ms @ 48 kHz`) with 60 FPS OpenGL oscilloscope & 64-band FFT. |
-| **Zero-Drift Retro & DVD Upscaler** | `ax_video_upscaler` | USB 3.0 HDMI capture (`240p` passthrough / `480i/576i` Bob deinterlace via MacroSilicon MS2130S) and GPU shader DVD upscaling (`720p/1080p/2K`), sample-clock-locked via `AudioMasterPtsSync`. |
+| **Zero-Drift Retro & DVD Upscaler** | `ax_video_upscaler` | USB 3.0 HDMI capture (`240p` passthrough / `480i/576i` Bob deinterlace via MacroSilicon MS2130S) and OpenGL 3.3 `Y`/`UV` shader DVD upscaling (`720p/1080p/2K`), sample-clock-locked via `AudioMasterPtsSync`. |
+| **Core 5 Espresso Appliance TUI** | `ax_appliance_tui` | Zero-dependency 24-bit ANSI Coffee/Espresso launcher pinned to Core 5 (`0x20`) with live `/run/lock/ax-dac.lock` and RAM telemetry. |
+
 
 ### 📊 System Architecture Comparison
 
@@ -191,7 +193,7 @@ Instead of stripping raw wire and crimping separate plugs, use a ready-terminate
 
 ### 6.3 Gain-Staging Summary
 
-* **Speaker Mode (`2.0 Vrms` DACs — HiBy FC3 / TRN Black Pearl \-\> Nobsound Q10):** Set `flac_ax --volume 0.80` (and DAC hardware buttons near max) so the DAC outputs a clean `~1.6–2.0 Vrms` signal, then control room volume solely on the **Nobsound Q10's** physical dial. *(If using the `2.5 Vrms` **FiiO KA11**, cap `--volume` at **`0.70–0.75`**.)*  
+* **Speaker Mode (`2.0 Vrms` DACs — HiBy FC3 `2.0 Vrms` / TRN Black Pearl / Dawn Pro 2 \-\> Nobsound Q10):** Set `flac_ax --volume 0.80` (and DAC hardware buttons near max) so the DAC outputs a clean `~1.6–2.0 Vrms` signal, then control room volume solely on the **Nobsound Q10's** physical dial. *(For the early **`1.3 Vrms` / `70 mW` HiBy FC3** revision, use **`--volume 0.95`** or set `AX_DAC_VOL=0.95` in `/userdata/system/ax-dac.conf`; for the `2.5 Vrms` **FiiO KA11**, cap `--volume` at **`0.72`**.)*  
 * **Reference Open-Back (`38 Ω` Grado SR325x):** Start at `--volume 0.50–0.65` on the HiBy FC3.  
 * **High-Impedance Open-Back (`120 Ω` Sennheiser HD 560S):** Start at `--volume 0.65–0.80`.  
 * **Sensitive IEMs / Low-Impedance (`16–32 Ω` Chu II, Zero:2, HD400S):** Always drop to `--volume 0.20–0.25` before plugging in.
