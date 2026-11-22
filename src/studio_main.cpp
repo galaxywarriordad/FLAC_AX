@@ -17,8 +17,11 @@
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -37,6 +40,29 @@
 namespace {
 
 std::atomic<bool> g_running{true};
+
+bool ParseUint32(std::string_view text, std::uint32_t& out) noexcept {
+    if (text.empty()) return false;
+    std::uint32_t value = 0U;
+    const auto* begin = text.data();
+    const auto* end = text.data() + text.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    if (ec != std::errc{} || ptr != end) return false;
+    out = value;
+    return true;
+}
+
+bool ParseDouble(std::string_view text, double& out) noexcept {
+    if (text.empty()) return false;
+    std::string buf(text);
+    char* end_ptr = nullptr;
+    const double val = std::strtod(buf.c_str(), &end_ptr);
+    if (end_ptr == buf.c_str() || *end_ptr != '\0' || !std::isfinite(val)) {
+        return false;
+    }
+    out = val;
+    return true;
+}
 
 void OnSignal(int /*sig*/) noexcept {
     g_running.store(false, std::memory_order_release);
@@ -122,8 +148,8 @@ int main(int argc, char** argv) {
     std::string device_override;
     std::string mixer_card = "FC3";
     std::string midi_override;
-    unsigned int sample_rate = 48000U;
-    snd_pcm_uframes_t period_frames = 96U; // 2.00 ms @ 48 kHz
+    std::uint32_t sample_rate = 48000U;
+    std::uint32_t period_frames_u32 = 96U; // 2.00 ms @ 48 kHz
 
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
@@ -136,19 +162,30 @@ int main(int argc, char** argv) {
         } else if (arg == "--mixer-card" && i + 1 < argc) {
             mixer_card = argv[++i];
         } else if (arg == "--volume" && i + 1 < argc) {
-            target_volume = std::stod(argv[++i]);
+            if (!ParseDouble(argv[++i], target_volume)) {
+                PrintUsage();
+                return 1;
+            }
             has_volume = true;
         } else if (arg == "--midi" && i + 1 < argc) {
             midi_override = argv[++i];
         } else if (arg == "--rate" && i + 1 < argc) {
-            sample_rate = static_cast<unsigned int>(std::stoul(argv[++i]));
+            if (!ParseUint32(argv[++i], sample_rate) || sample_rate == 0U) {
+                PrintUsage();
+                return 1;
+            }
         } else if (arg == "--period" && i + 1 < argc) {
-            period_frames = static_cast<snd_pcm_uframes_t>(std::stoul(argv[++i]));
+            if (!ParseUint32(argv[++i], period_frames_u32) || period_frames_u32 == 0U) {
+                PrintUsage();
+                return 1;
+            }
         } else {
             PrintUsage();
             return 1;
         }
     }
+
+    const auto period_frames = static_cast<snd_pcm_uframes_t>(period_frames_u32);
 
     InstallSignals();
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
