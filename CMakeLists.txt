@@ -16,20 +16,25 @@ pkg_check_modules(FLAC REQUIRED IMPORTED_TARGET flac++)
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 
 if(FLAC_AX_USE_AX_SDK)
-    if(DEFINED FETCHCONTENT_SOURCE_DIR_AX_SDK AND EXISTS "${FETCHCONTENT_SOURCE_DIR_AX_SDK}/CMakeLists.txt")
-        add_subdirectory("${FETCHCONTENT_SOURCE_DIR_AX_SDK}" "${CMAKE_CURRENT_BINARY_DIR}/_deps/ax_sdk-build")
-    else()
-        include(FetchContent)
-        set(_ax_proto "https")
-        set(_ax_host "github.com")
-        set(_ax_repo "galaxywarriordad/ax-sdk.git")
-        FetchContent_Declare(
-            ax_sdk
-            GIT_REPOSITORY "${_ax_proto}://${_ax_host}/${_ax_repo}"
-            GIT_TAG        v1_36_1
-            GIT_SHALLOW    TRUE
-        )
-        FetchContent_MakeAvailable(ax_sdk)
+    if(NOT TARGET ax::core)
+        if(DEFINED FETCHCONTENT_SOURCE_DIR_AX_SDK AND EXISTS "${FETCHCONTENT_SOURCE_DIR_AX_SDK}/CMakeLists.txt")
+            add_subdirectory(
+                "${FETCHCONTENT_SOURCE_DIR_AX_SDK}"
+                "${CMAKE_CURRENT_BINARY_DIR}/_deps/ax_sdk-build"
+            )
+        else()
+            include(FetchContent)
+            set(_ax_proto "https")
+            set(_ax_host "github.com")
+            set(_ax_repo "galaxywarriordad/ax-sdk.git")
+            FetchContent_Declare(
+                ax_sdk
+                GIT_REPOSITORY "${_ax_proto}://${_ax_host}/${_ax_repo}"
+                GIT_TAG        v1_36_1
+                GIT_SHALLOW    TRUE
+            )
+            FetchContent_MakeAvailable(ax_sdk)
+        endif()
     endif()
 endif()
 
@@ -43,12 +48,14 @@ set(FLAC_AX_DSP_STUDIO_HEADERS
     src/dsp/tape_delay_dsp.hpp
     src/midi/mpk_mini3_oled.hpp
 )
+
 set(FLAC_AX_VIDEO_HEADERS
     src/video/ax_720p_hw_gate.hpp
     src/video/v4l2_live_capture.hpp
     src/video/upscale_720p_shader.hpp
     src/video/av_pts_sync.hpp
 )
+
 # --- 1. Headless Bit-Perfect ESS Sabre FLAC Player ---
 add_executable(flac_ax
     src/main.cpp
@@ -105,6 +112,7 @@ if(FLAC_AX_BUILD_AV_STUDIO)
         target_compile_definitions(ax_av_studio PRIVATE FLAC_AX_HAS_AX_SDK=1)
     endif()
 endif()
+
 # --- 3. Single-Stream 720p/1080p/2K DVD & V4L2 Retro Upscaler ---
 if(FLAC_AX_BUILD_VIDEO_UPSCALER)
     add_executable(ax_video_upscaler
@@ -129,6 +137,7 @@ if(FLAC_AX_BUILD_VIDEO_UPSCALER)
         target_compile_definitions(ax_video_upscaler PRIVATE FLAC_AX_HAS_AX_SDK=1)
     endif()
 endif()
+
 if(FLAC_AX_ENABLE_LTO)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
@@ -142,3 +151,4 @@ if(FLAC_AX_ENABLE_LTO)
         endif()
     endif()
 endif()
+```[cite: 29]
