@@ -9,6 +9,7 @@ option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_36_1)" ON)
 option(FLAC_AX_BUILD_AV_STUDIO "Build ax_av_studio (MPK Mini MK3 + AVX2 Synth + A/V HUD)" ON)
 option(FLAC_AX_BUILD_VIDEO_UPSCALER "Build single-stream 720p/1080p/2K DVD & V4L2 retro upscaler (ax_video_upscaler)" ON)
 option(FLAC_AX_BUILD_APPLIANCE_TUI "Build Core 5 Espresso Real-Time Appliance TUI (ax_appliance_tui)" ON)
+option(FLAC_AX_ENABLE_OPENMPT "Enable Amiga/Atari ST tracker module playback (.mod/.xm/.s3m/.it) via libopenmpt" ON)
 option(FLAC_AX_ENABLE_SDL2_GL "Enable SDL2 + OpenGL window output when available" ON)
 option(FLAC_AX_SKYLAKE_ARCH "Target Skylake microarchitecture (-march=skylake / /arch:AVX2)" ON)
 option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (LLVM LTO / IPO) in Release builds" ON)
@@ -17,6 +18,14 @@ if(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(FLAC REQUIRED IMPORTED_TARGET flac++)
     pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+endif()
+
+set(_flac_ax_has_openmpt FALSE)
+if(UNIX AND NOT APPLE AND FLAC_AX_ENABLE_OPENMPT)
+    pkg_check_modules(_FLAC_AX_OPENMPT QUIET IMPORTED_TARGET libopenmpt)
+    if(_FLAC_AX_OPENMPT_FOUND)
+        set(_flac_ax_has_openmpt TRUE)
+    endif()
 endif()
 
 set(_flac_ax_has_sdl2_gl FALSE)
@@ -64,9 +73,11 @@ endif()
 
 set(FLAC_AX_DSD_HEADERS
     src/dsd_dop_reader.hpp
+    src/tracker_openmpt_reader.hpp
 )
 
 set(FLAC_AX_DSP_STUDIO_HEADERS
+    src/audio/wav_bounce_recorder.hpp
     src/dsp/full_feature_synth.hpp
     src/dsp/stereo_reverb_dsp.hpp
     src/dsp/tape_delay_dsp.hpp
@@ -123,7 +134,7 @@ function(flac_ax_apply_target_flags target_name)
     endif()
 endfunction()
 
-# --- 1. Headless Bit-Perfect ESS Sabre FLAC Player ---
+# --- 1. Headless Bit-Perfect ESS Sabre FLAC, DoP & Tracker Module Player ---
 add_executable(flac_ax
     src/main.cpp
     ${FLAC_AX_DSD_HEADERS}
@@ -131,6 +142,10 @@ add_executable(flac_ax
 flac_ax_apply_target_flags(flac_ax)
 if(UNIX AND NOT APPLE)
     target_link_libraries(flac_ax PRIVATE PkgConfig::FLAC PkgConfig::ALSA)
+    if(_flac_ax_has_openmpt)
+        target_link_libraries(flac_ax PRIVATE PkgConfig::LIBOPENMPT)
+        target_compile_definitions(flac_ax PRIVATE FLAC_AX_HAS_OPENMPT=1)
+    endif()
 endif()
 
 # --- 2. Unified [AX] Audio/Visual Synth, Mixer & Spectrum Studio ---
