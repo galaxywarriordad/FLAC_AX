@@ -19,7 +19,7 @@
 namespace flac_ax {
 
 enum class PreloadMode {
-    SingleFile,   // < ~6.5 GiB tier fallback
+    SingleFile,   // < ~6.5 GiB tier fallback (64 MiB cap on <= 1.5 GiB handhelds, 512 MiB on > 1.5 GiB)
     Window3Files, // ~8 GiB RAM: preload up to 3 files at a time
     WholeAlbum    // >= 16 GiB RAM: preload whole album into RAM
 };
@@ -61,9 +61,11 @@ inline void ReadLinuxMemInfo(std::uint64_t& mem_total_bytes,
 inline PreloadPolicy EvaluatePreloadPolicy(
     std::uint64_t mem_total_bytes,
     std::uint64_t mem_available_bytes = 0) noexcept {
+    constexpr std::uint64_t kMiB = 1024ULL * 1024ULL;
     constexpr std::uint64_t kGiB = 1024ULL * 1024ULL * 1024ULL;
     constexpr std::uint64_t kWholeAlbumThreshold = 16ULL * kGiB;
-    constexpr std::uint64_t kEightGbTierMin = (6ULL * kGiB) + (512ULL * 1024ULL * 1024ULL);
+    constexpr std::uint64_t kEightGbTierMin = (6ULL * kGiB) + (512ULL * kMiB);
+    constexpr std::uint64_t kEmbeddedHandheldMax = (1ULL * kGiB) + (512ULL * kMiB);
 
     PreloadPolicy policy{};
     policy.detected_mem_total_bytes = mem_total_bytes;
@@ -81,10 +83,15 @@ inline PreloadPolicy EvaluatePreloadPolicy(
             policy.mode = PreloadMode::SingleFile;
         }
         policy.max_total_bytes = static_cast<std::size_t>(2ULL * kGiB);
+    } else if (mem_total_bytes > 0 && mem_total_bytes <= kEmbeddedHandheldMax) {
+        // <= 1.5 GiB embedded / handheld boards (e.g., RK3326 BATLEXP G350 / R36S 1 GB LPDDR3)
+        policy.mode = PreloadMode::SingleFile;
+        policy.max_window_files = 1;
+        policy.max_total_bytes = static_cast<std::size_t>(64ULL * kMiB);
     } else {
         policy.mode = PreloadMode::SingleFile;
         policy.max_window_files = 1;
-        policy.max_total_bytes = static_cast<std::size_t>(512ULL * 1024ULL * 1024ULL);
+        policy.max_total_bytes = static_cast<std::size_t>(512ULL * kMiB);
     }
 
     return policy;
