@@ -64,6 +64,7 @@ cmake -S . -B build -G Ninja \
   -DFLAC_AX_USE_AX_SDK=ON \
   -DFLAC_AX_BUILD_AV_STUDIO=ON \
   -DFLAC_AX_BUILD_VIDEO_UPSCALER=ON \
+  -DFLAC_AX_BUILD_APPLIANCE_TUI=ON \
   -DFLAC_AX_ENABLE_SDL2_GL=ON \
   -DFLAC_AX_SKYLAKE_ARCH=ON \
   -DFLAC_AX_ENABLE_LTO=ON
@@ -74,14 +75,29 @@ ninja -C build -j 4
 ### 3.2 Gain-Staged Execution (`[AX]` Reference Rig)
 
 ```sh
-# Speakers (HiBy FC3 -> Nobsound Q10 -> Wharfedale Diamond 9.0) or Sennheiser HD 560S
+# Speakers — 2.0 Vrms HiBy FC3 (112 mW) -> Nobsound Q10 -> Wharfedale Diamond 9.0
 ./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.80 ~/Music/FLAC_Album/*.flac
+
+# Speakers — Early 1.3 Vrms HiBy FC3 Revision (70 mW) -> Nobsound Q10 / Class-D Amp
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.95 ~/Music/FLAC_Album/*.flac
+
+# Speakers — TRN Black Pearl / Moondrop Dawn Pro 2 (2.0 Vrms) -> Class-D Amp
+./build/flac_ax --device hw:CARD=BLACKPEARL,DEV=0 --mixer-card BLACKPEARL --volume 0.80 ~/Music/FLAC_Album/*.flac
+
+# Speakers — 2.5 Vrms FiiO KA11 (capped to prevent Class-D input clipping)
+./build/flac_ax --device hw:CARD=KA11,DEV=0 --mixer-card KA11 --volume 0.72 ~/Music/FLAC_Album/*.flac
 
 # Reference Open-Back Headphones (Grado SR325x, 38 Ohm)
 ./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.55 ~/Music/FLAC_Album/*.flac
 
 # Live 2.00 ms AV Synthesizer & OpenGL Studio HUD (Akai MPK Mini MK3)
 ./build/ax_av_studio --fullscreen --device hw:CARD=FC3,DEV=0 --volume 0.80
+
+# Single-Stream 1080p Retro HDMI Capture Upscaler (MacroSilicon MS2130S -> Core 1 GL Shader)
+./build/ax_video_upscaler --mode retro --preset 1080p --v4l2 /dev/video0 --scan bob --device hw:CARD=FC3,DEV=0 --volume 0.80
+
+# Core 5 Coffee/Espresso Appliance TUI Launcher
+./build/ax_appliance_tui
 ```
 
 &nbsp;
