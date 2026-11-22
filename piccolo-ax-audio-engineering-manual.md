@@ -390,7 +390,7 @@ ps -eLo pid,cls,rtprio,psr,comm | grep ax_av_studio
 ```
 
 ---
-## 🪟 Section 9: Windows 10/11 Dual-Boot Fallback Setup
+## 💻 Section 9: Windows 10/11 Dual-Boot Fallback Setup
 
 1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (plus disable Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.
 2. **Match Sample Rate / Exclusive Bit-Exact Mode:** Set the default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies). For bit-perfect, bypass-mixer playback, use **ASIO** (`FlexASIO` in Exclusive mode targeting the HiBy FC3 `VID 0x32BB`) or **WASAPI Exclusive Mode** in Foobar2000 / MusicBee / `flac_ax`.
