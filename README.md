@@ -13,14 +13,17 @@
 ## 🎯 What It Means For You
 
 ### 🎮 For Gamers & Retro Enthusiasts
+
 * **Zero-Contention Hardware Arbitration:** `FLAC_AX` respects `/run/lock/ax-dac.lock` (`flock`) and clean `SIGUSR1` / `SIGTERM` handoff—meaning your music player, synth rig, or video upscaler immediately yields the ESS Sabre USB DAC when you switch modes or launch an emulator, and reclaims it cleanly when you exit without ALSA `EBUSY` lockups.
-* **Sub-2 ms Audio & Low-Latency HDMI Capture:** Built with the exact same `SCHED_FIFO` real-time scheduling, `nrpacks=1` USB isochronous packet tuning, and `2:3:1` core pinning required by competitive low-latency emulation on `Piccolo [AX]`. In `retro` mode, `ax_video_upscaler` pulls uncompressed `YUYV 4:2:2` (`MJPEG` fallback) frames over USB 3.0 from a **MacroSilicon MS2130S** on Core 5 (`MMAP` newest-frame handoff) and upscales to `720p`, `1080p`, or `2K` without queue lag.
+* **Sub-2 ms Audio & Low-Latency HDMI Capture:** Built with the exact same `SCHED_FIFO` real-time scheduling, `isolcpus` / `nohz_full` kernel isolation, and `2:3:1` core pinning required by competitive low-latency emulation on `Piccolo [AX]`. In `retro` mode, `ax_video_upscaler` pulls uncompressed `YUYV 4:2:2` (`MJPEG` fallback) frames over USB 3.0 from a **MacroSilicon MS2130S** on Core 5 (`MMAP` newest-frame handoff) and upscales to `720p`, `1080p`, or `2K` without queue lag.
 
 ### 🎧 For Audiophiles & Home Cinema Listeners
+
 * **100% RAM-Resident Playback (Zero Storage Bus Noise):** `flac_ax` preloads entire FLAC albums and native `.dsf`/`.dff` DSD masters into locked memory on Core 5 (`RamFilePreloader`) before playback starts, letting your storage bus go completely idle during listening.
 * **True Bit-Perfect `S32_LE`, DoP & Audio-Master DVD Sync:** Bypasses PipeWire, PulseAudio, `dmix`, software volume scaling, and kernel resampling completely—feeding raw `32-bit` PCM (`44.1 kHz – 384 kHz`) and `0x05`/`0xFA`-packed `DSD64`/`DSD128` streams directly to the ESS Sabre `ES9281AC Pro` DAC chip. For DVD playback (`ax_video_upscaler --mode dvd`), `AudioMasterPtsSync` anchors video presentation timestamps directly to the ESS Sabre `S32_LE` sample clock (with host-side 5.1-to-stereo downmix headroom ahead of the DAC).
 
 ### 🎹 For Musicians
+
 * **Hardware-Feel `2.00 ms` Response:** Strike a key or pad on the **Akai MPK Mini MK3** and hear the result in `96` samples (`2.00 ms` at `48 kHz`)—faster than acoustic sound travels two feet from your studio monitors—backed by zero-allocation DSP and lock-free SPSC MIDI queues.
 * **Complete Three-Engine Synth & FX Rig:** Combines a 16-voice dual-oscillator subtractive synth (sawtooth + `-1 octave` square sub-oscillator, 2-pole resonant SVF, ADSR envelopes, and cubic soft-clip drive) and an 8-voice synthesized drum machine with a 4-comb damped stereo reverb and `11%`-offset damped stereo tape delay—complete with a real-time 60 FPS oscilloscope and 64-band logarithmic FFT analyzer.
 
@@ -37,19 +40,22 @@
 
 ---
 
-## 🧰 Hardware Baseline
+## 🧰 Hardware Baseline (`[AX]` Reference Rig)
 
-* **CPU / Host:** 6-core `x86_64` desktop processor (e.g., Intel Core `i5-9600K` / `i5-8600K`) with `16–32 GB` RAM running Linux (`Piccolo [AX]` `6.12-rt` or desktop Linux)
-* **GPU (`ax_av_studio` & `ax_video_upscaler`):** **NVIDIA GTX 980 Ti** (`6 GB` GDDR5, governed by `5.50 GiB` VRAM ceiling and `5.00 GiB` reap trigger in `ax-sdk` `hardware_profiles.json` `v2.1`)
-* **DAC:** **HiBy FC3** (`VID 0x32BB`, ESS Sabre `ES9281AC Pro` / `ES9281PRO`, PCM `S32_LE` & DoP)
-* **HDMI Capture (`ax_video_upscaler`, Optional):** **MacroSilicon MS2130S** (`VID:PID 534d:2130`, USB 3.0 `5000M` UVC `YUYV 4:2:2` / `MJPEG` + UAC `48 kHz` audio)
-* **Controller (`ax_av_studio`, Optional):** **Akai MPK Mini MK3** (25 keys, 16 velocity pads, XY thumbstick, 8 rotary encoders K1–K8)
+* **🖥️ CPU / Host:** 6-core `x86_64` desktop processor (e.g., Intel Core `i5-9600K` / `i5-8600K`) with `16–32 GB` RAM running Linux (`Piccolo [AX]` `6.12-rt` or desktop Linux)
+* **🎮 GPU (`ax_av_studio` & `ax_video_upscaler`):** **NVIDIA GTX 980 Ti** (`6 GB` GDDR5, governed by `5.50 GiB` VRAM ceiling and `5.00 GiB` reap trigger in `ax-sdk` `hardware_profiles.json` `v2.1`)
+* **🔌 Reference DAC:** **HiBy FC3** (`VID 0x32BB`, ESS Sabre `ES9281AC Pro`, PCM `S32_LE` & DoP) — *also supports **TRN Black Pearl** (`Dual CS43131` + on-board hardware PEQ)*
+* **🔊 Reference Speakers & Amp:** **Nobsound Q10** (`TI TPA3116` Class-D stereo mini-amp + `19V–20V` PSU) driving **Wharfedale Diamond 9.0** front-ported bookshelf speakers via pre-terminated `£6.45` HiFi banana-plug speaker cables
+* **🎧 Reference Open-Back Headphones:** **Grado SR325x** (`38 Ω`, CNC-machined alloy cups) driven directly from the HiBy FC3 (`--volume 0.50–0.65`)
+* **📹 HDMI Capture (`ax_video_upscaler`, Optional):** **MacroSilicon MS2130S** (`VID:PID 534d:2130`, USB 3.0 `5000M` UVC `YUYV 4:2:2` / `MJPEG` + UAC `48 kHz` audio)
+* **🎹 Controller (`ax_av_studio`, Optional):** **Akai MPK Mini MK3** (25 keys, 16 velocity pads, XY thumbstick, 8 rotary encoders K1–K8)
 
 ---
 
 ## 🛠️ Quick Build & Run
 
 ### 1. Install Dependencies (Ubuntu / Debian / Kubuntu)
+
 ```bash
 sudo apt update
 sudo apt install -y \
@@ -58,6 +64,7 @@ sudo apt install -y \
 ```
 
 ### 2. Configure & Compile (`-j 4` L3 Cache Discipline)
+
 ```bash
 cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
@@ -71,8 +78,9 @@ ninja -C build -j 4
 ```
 
 ### 3. Run
+
 ```bash
-# 1. Headless bit-perfect FLAC / DSD DoP playback
+# 1. Headless bit-perfect FLAC / DSD DoP playback (Nobsound Q10 + Diamond 9.0)
 ./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.80 /music/album/
 
 # 2. Live 2.0 ms AV Synthesizer & OpenGL Spectrum Studio
@@ -89,6 +97,6 @@ ninja -C build -j 4
 
 ## 📚 Documentation
 
-* **[Complete User Guide & Build Manual](docs/FLAC_AX_AVStudio_Complete_User_Guide.md)** — Udev low-latency rules (`VID 0x32BB`, `nrpacks=1`), `/run/lock/ax-dac.lock` arbitration, CLI flags, Akai MPK Mini MK3 CC mappings, and CMake/Ninja build reference.
-* **[Hi-Fi & Studio Enthusiast's Guide](docs/LAYMANS_GUIDE.md)** — Plain-English magazine-style overview for audiophiles and musicians covering the HiBy FC3, three-engine DSP trio, and hardware comparisons.
-* **[Architecture Overview](docs/Architecture.md)** — Deep dive into the `2:3:1` thread topology, lock-free SPSC ring buffers, and memory-locking guarantees.
+* **[Complete Bare-Metal Audio, AV & Hardware Master Guide (UK)](FLAC_AX_Bare-Metal_Audio_AV_Appliance_Guide.md)** — Full hardware architecture, USB DAC silicon shootout, `udev` & WirePlumber exclusion rules, `ax-launch.sh` Core 0 launcher, Windows `FlexASIO.toml` fallback, and tiered system blueprints.
+* **[Transducer & Cabling Guide (Richer Sounds UK)](Speakers_Headphones_and_Wiring.md)** — Nearfield speaker selection (`Wharfedale Diamond 9.0` / `220`, `Q Acoustics 3010i`, `JBL Control One`), open-back headphones (`Grado SR325x`, `Sennheiser HD 560S`), desk placement geometry, and pre-terminated cabling.
+* **[Hi-Fi & Studio Enthusiast's Guide](Hi-Fi_and_Studio_Enthusiasts_Guide.md)** — Plain-English overview for audiophiles and musicians covering RAM-resident playback, the three-engine DSP trio, and Akai MPK Mini MK3 control mappings.
