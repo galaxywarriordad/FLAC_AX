@@ -22,7 +22,7 @@ Modern desktop operating systems treat audio as a background convenience service
    * **`ax_av_studio` (Live AV Synthesizer):** Runs a 16-voice polyphonic melodic synth, 8-voice drum engine, 2-pole stereo State-Variable Filter, 4-comb `StereoReverbDsp`, and interpolated `TapeDelayDsp` entirely over preallocated `std::array` buffers with zero heap allocations on the real-time thread.
 
 3. **🔒 Hardware-Level DAC Arbitration & USB Power Tuning**
-   Both binaries coordinate exclusive ownership of the ESS Sabre DAC via `/run/lock/ax-dac.lock` (`flock`), preventing accidental sample-rate collisions or device contention while disabling USB autosuspend for `VID 0x32BB`.
+   Both binaries coordinate exclusive ownership of the ESS Sabre DAC via `/run/lock/ax-dac.lock` (`flock`), preventing accidental sample-rate collisions or device contention while disabling USB autosuspend for `VID 0x32BB` (`power/control="on"`).
 
 ---
 
@@ -30,7 +30,7 @@ Modern desktop operating systems treat audio as a background convenience service
 
 | Dimension | 💿 Commercial Audiophile Players *(Roon / Audirvana Studio)* | 🎹 Commercial Desktop DAWs *(Ableton Live / Bitwig)* | 🎛️ Standalone Hardware Boxes *(Elektron Octatrack / Akai MPC Live)* | ⚡ **FLAC_AX & AX AV Studio** |
 | :--- | :--- | :--- | :--- | :--- |
-| **🔊 Audio Signal Path** | Bit-perfect via exclusive ALSA/ASIO/RAAT, but still runs atop a general-purpose OS scheduler | Routed through multi-bus floating-point mixers and plugin wrappers; requires manual latency compensation | Fixed-point/DSP hardware path; external/thru routing typically incurs `~2.0–5.0 ms` converter + buffer latency | **Direct `hw:CARD` ALSA `S32_LE`**; zero mixer, zero resampler, zero software gain staging |
+| **🔊 Audio Signal Path** | Bit-perfect via exclusive ALSA/ASIO/RAAT, but still runs atop a general-purpose OS scheduler | Routed through multi-bus floating-point mixers and plugin wrappers; requires manual latency compensation | Fixed-point/DSP hardware path; external/thru routing typically incurs `~2.0–5.0 ms` converter + buffer latency | **Direct `hw:CARD` ALSA `S32_LE` (`96`-frame period)**; zero mixer, zero resampler, zero software gain staging |
 | **🧮 CPU & Thread Determinism** | Subject to OS background tasks, database indexing, and network polling | Subject to GUI thread spikes, GC/plugin allocations, and dynamic core migration | Deterministic embedded ARM/DSP chip, but capped polyphony and fixed FX routing | **Hard `2:3:1` CPU core affinity + `SCHED_FIFO`**; isolated RT audio core with zero syscalls or allocations |
 | **💾 Storage & Disk I/O During Playback** | Streams from SSD/NAS with read-ahead buffers | Streams audio clips from disk during playback | Streams long samples from SD/SATA storage | **100% RAM-resident album preloading** (`RamFilePreloader`) on Core `5` prior to playback |
 | **🎼 DSD & High-Res PCM Support** | Native/DoP DSD & PCM up to `384 kHz` (paid license/subscription) | PCM only (no native `.dsf`/`.dff` DoP playback) | PCM only (`44.1` / `48 kHz` internal project rate) | **Native PCM (`S32_LE`) + `.dsf`/`.dff` DoP (`DSD64`/`DSD128`)** with `0x05`/`0xFA` marker packing |
