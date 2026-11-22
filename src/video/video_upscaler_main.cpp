@@ -604,11 +604,4 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
-```[cite: 29]
 
-### Steps to Wire & Test on Windows
-
-1. **Gate ALSA / `pthread` in `CMakeLists.txt` for Windows:** Wrap `PkgConfig::ALSA` and `pthread` in `if(NOT WIN32)` (or `if(UNIX AND NOT APPLE)`) in `CMakeLists.txt` so Windows CMake/Ninja configures and builds `ax_video_upscaler` without requiring Linux ALSA/pthread libraries[cite: 28, 29]. *Verification:* Run `cmake -S . -B build-win -G Ninja -DFLAC_AX_BUILD_AV_STUDIO=OFF` on Windows and verify `ax_video_upscaler` compiles cleanly[cite: 28, 29].
-2. **Optional SDL2 + OpenGL hook for `ax_video_upscaler`:** If you want `Core1UpscaleStage` to open a window and swap buffers on Linux/Windows when SDL2/OpenGL are present, check for `SDL2` and `OpenGL::GL` in the `FLAC_AX_BUILD_VIDEO_UPSCALER` block of `CMakeLists.txt` and define `FLAC_AX_HAS_SDL2_GL=1`[cite: 28, 29]. *Verification:* Build with `--preset 720p`, `--preset 1080p`, and `--preset 2k` and confirm the preset resolution prints at startup[cite: 29].
-
-Would you like to move on to **Step 3 (`ess_dac_hooks.hpp` & `StereoFrameRing` DoP / hardware mixer hooks)** next?
