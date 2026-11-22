@@ -1,4 +1,4 @@
-### 📋 Sprint Progress Report — FLAC\_AX Bit-Perfect ALSA Pipeline, \[AX\] Audio/Visual Studio, Single-Stream Video Upscaler & Espresso Appliance TUI
+## 📋 Sprint Progress Report — FLAC\_AX Bit-Perfect ALSA Pipeline, \[AX\] Audio/Visual Studio, Single-Stream Video Upscaler & Espresso Appliance TUI
 
 ## 🎯 Executive Summary
 
