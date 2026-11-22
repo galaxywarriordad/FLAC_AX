@@ -1,20 +1,22 @@
-# 🎛️ Piccolo [AX] & FLAC_AX — Complete Bare-Metal Audio, AV & Hardware Engineering Manual (UK)
+# 🎛️ Piccolo \[AX\] & FLAC_AX — Complete Bare-Metal Audio, AV & Hardware Engineering Manual (UK)
 
 **Target System:** Bare-Metal Audio, Realtime Synth (`2.00 ms`) & Retro/DVD AV Appliance  
 **Hardware Stack:** HiBy FC3 (`VID 0x32BB`, ESS Sabre ES9281AC Pro) + Class-D Stereo Amp + Passive/Active Hi-Fi Speakers / Wired Headphones / 2-in-1 DSP IEMs  
 **Runtime Platform:** Real-Time Linux (`6.12-rt` / `Piccolo [AX]`) & Desktop Linux (`Ubuntu/Kubuntu 24.04+`) + Windows 10/11 Fallback  
 **Total System Cost:** **~£50 – £730** (End-to-end deterministic hardware latency: **1.5 – 3.0 ms**)
 
-Pairing **`FLAC_AX`** on real-time Linux (`6.12-rt` / `Piccolo [AX]`) with a modular **HiBy FC3 DAC**, a **Class-D stereo amplifier**, and **passive hi-fi speakers** or **wired headphones/IEMs** transforms an ordinary x86_64 PC into a d eterministic, sub-2 ms bare-metal audio appliance—delivering bit-perfect 32-bit PCM/DSD playback, a `2.00 ms` hardware-feel synth workstation, and sample-clock-locked retro/DVD upscaling.
+Pairing **`FLAC_AX`** on real-time Linux (`6.12-rt` / `Piccolo [AX]`) with a modular **HiBy FC3 DAC**, a **Class-D stereo amplifier**, and **passive hi-fi speakers** or **wired headphones/IEMs** transforms an ordinary `x86_64` PC into a deterministic, sub-2 ms bare-metal audio appliance—delivering bit-perfect 32-bit PCM/DSD playback, a `2.00 ms` hardware-feel synth workstation, and sample-clock-locked retro/DVD upscaling.
 
 ---
 
 ## 🎯 Section 1: Real-Time Engine & `2:3:1` Core Topology
 
 ### 🚫 The Modern Desktop Audio Trap
+
 Standard desktop operating systems (Windows 10/11 or stock Linux running PipeWire/PulseAudio) funnel audio through shared software mixers that silently resample streams, apply reduced-precision digital volume attenuation, and introduce `10` to `150+ ms` of buffer and spatial-DSP lag. Meanwhile, built-in motherboard audio chips sit millimetres from GPU VRMs and high-speed PCIe lanes, picking up coil whine, ground noise, and shared USB/SSD interrupt stutters.
 
 ### ⚡ The Modular `FLAC_AX` Breakthrough
+
 Stripping away the OS audio server and active speaker DSP puts **70% to 80% of your budget** directly into silicon, clean current amplification, and acoustic drivers:
 
 1. **The Software Engine (`FLAC_AX` on Linux `6.12-rt` / `Piccolo [AX]`):** Runs a zero-allocation C++20 real-time engine across a strict `2:3:1` CPU core topology. Core 5 (`RamFilePreloader`) decodes and locks entire lossless FLAC albums (up to `32-bit/384kHz`) or native `DSD64/DSD128` masters into physical RAM (`mlockall`) before playback begins—allowing your SSD bus to go completely silent. Core 0 (`SCHED_FIFO`, Priority `80`, `isolcpus` / `nohz_full` / `rcu_nocbs`) streams bit-exact `S32_LE` or `DoP` frames directly to ALSA node `hw:CARD=FC3,DEV=0` at **1.5–2.00 ms** latency.
@@ -66,7 +68,7 @@ Consumer and desktop Class-D speaker amplifiers are calibrated around a **2.0 Vr
 ### 2.1 Complete USB Front-End Comparison Matrix
 
 | Specification | Generic `UC02` Clone (`VID 0x0000`) | Genuine Apple Dongle (`VID 0x05AC`) | Older HiBy FC3 (Pre-Owned) | New HiBy FC3 with Display (`VID 0x32BB`) | Cirrus Logic CS43131 Dongle *(Fosi DS2 / FiiO KA11)* | Neat Bumblebee (Pre-Owned Mic+DAC) |
-| :---- | :---- | :---- | :---- | :---- | :---- | :---- |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **UK Price & Condition** | ~£3 – £7 (New) | **~£9** (New) | **~£25 – £35** (Used Only) | **£35** (New) | **~£49 – £53** (New) | **~£25 – £50** (Used Only) |
 | **USB Hardware ID** | `VID_0000&PID_0000` (Blank) | `VID_05AC&PID_110A` | `VID_32BB` | `VID_32BB` | Vendor-Specific UAC 2.0 | `VID_0C76&PID_1617` |
 | **`Piccolo [AX]` Support** | Poor (udev ID collision) | Plug & Play (UAC 1/2) | **Native Target** (`hw:CARD=FC3`) | **Native Target** (`hw:CARD=FC3`) | Manual ALSA/udev Config | Manual ALSA Config (UAC 1.0) |
@@ -81,6 +83,7 @@ Consumer and desktop Class-D speaker amplifiers are calibrated around a **2.0 Vr
 | **Built-in Microphone?** | Inline Headset Mic ADC | Inline Headset Mic ADC | **No** | **No** | **No** | **Yes** (Cardioid Condenser) |
 
 ### 2.2 Front-End Engineering Notes & Neat Bumblebee Feedback Isolation
+
 * **New HiBy FC3 with Display (£35 New — Native `[AX]` Reference):** Single-die USB PHY + ES9281AC Pro eliminates external USB-to-I²S jitter, sustains 96-frame (`2.00 ms @ 48 kHz`) `SCHED_FIFO` buffers, arbitrates `/run/lock/ax-dac.lock` cleanly across emulators and `flac_ax`, and outputs a full **2.0 Vrms** into Class-D amplifiers.
 * **Neat Bumblebee (~£25–£50 Used — 2-in-1 Studio Mic + DAC):** Integrates a discrete JFET condenser preamp and external 24-bit/96 kHz ADC/DAC codec (`100 mW @ 16 Ω`). Because the zero-latency headphone monitor tap sums directly ahead of the ADC with no physical mute switch, builders driving Class-D speakers must keep the top switch on **NEUTRAL**, `HEADPHONE VOL` at **2 o'clock (~70%)**, and **`MIC GAIN` at 0% (fully counter-clockwise)** during speaker playback to prevent electro-acoustic feedback loops.
 
@@ -91,6 +94,7 @@ Consumer and desktop Class-D speaker amplifiers are calibrated around a **2.0 Vr
 Desktop Class-D amplifiers switch DC supply rails directly into the speaker load via an LC reconstruction filter—meaning **power supply quality directly determines bass punch, noise floor, and hardware safety**.
 
 ### 3.1 Amplifier Tiers & Safe Voltage Matching
+
 * **Ultra-Budget Tier (`TI TPA3116`, ~£20–£43):** **Nobsound NS-20G** (dual TPA3116, 30-step digital encoder + front 3.5 mm `AUX` jack), **Nobsound NS-01G Pro**, or **Fosi Audio V1.0G**. *(Ensure you pick a 2-channel stereo amp, not a mono sub amp like the Douk NS-03G.)*
   * **Safe PSU:** Rated 12V–24V DC (`5.5 × 2.5 mm` centre-positive). Use a regulated **19V/4.74A (90W)** or **20V/4.5A (90W)** brick (e.g., genuine Dell/Lenovo/HP laptop brick with adapter, or Mean Well `GST90A19`), or a regulated `24V/4A–5A` supply—staying safely below the TPA3116's 26V ceiling and 25V smoothing capacitors.
 * **Sweet-Spot / High-Headroom Tier (`TI TPA3255`, ~£65–£105):** **Fosi Audio V3** (logarithmic Taper A pot), **Fosi TB10D**, or **Aiyima A07**.
@@ -108,7 +112,7 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 
 ## 🔊 Section 4: Loudspeakers (UK Market — Richer Sounds & Active Pro)
 
-| Tier & Model | UK Price | Impedance / Sensitivity | Freq. Range & Size (`H×W×D`) | Port & Acoustic Design | Best Piccolo [AX] Pairing & Character |
+| Tier & Model | UK Price | Impedance / Sensitivity | Freq. Range & Size (`H×W×D`) | Port & Acoustic Design | Best Piccolo \[AX\] Pairing & Character |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **1A. Wharfedale Diamond 9.0** | **~£99** | `6 Ω` / `86 dB` | `60 Hz – 24 kHz`<br>`236 × 145 × 165 mm` | **Front-firing bass reflex** | **Nobsound NS-20G or Fosi V3.** Warm, smooth Kevlar midrange; front port allows placement flush against a shallow desk wall without bass boom. |
 | **1B. JBL Control One** | **~£99** | `4–8 Ω` / `89 dB` | `80 Hz – 20 kHz`<br>`228 × 155 × 139 mm` | Front / Compact Studio (+ desk/wall brackets) | **Nobsound NS-20G or Fosi V3.** High `89 dB` efficiency; retro game SFX and synth leads jump out cleanly at low volume. |
@@ -137,7 +141,8 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 | **Grado SR325x / Classic** | **~£299 – £329** | Open On-Ear (Alloy, `280 g`) | `38 Ω` / `98–99.8 dB` | **★★★★★** | ★★★★☆ | ★★★☆☆ | CNC-machined aluminium cups; flagship DSD detail straight out of HiBy FC3. |
 
 ### 5.2 In-Ear Monitors (IEMs — `-26 dB` Passive Isolation & 2-in-1 USB-C DSP Options)
-*Crucial `FLAC_AX` Gain Rule:* When plugging `16–32 Ω` IEMs into `hw:CARD=FC3,DEV=0`, buy the **`3.5 mm`** cable version and drop volume to **`--volume 0.20–0.25`** before playback. Choose the **`USB-C DSP`** editions (which embed a `24-bit/96kHz` DAC inside the USB-C plug) for standalone 2-in-1 use on phones/PCs without a separate dongle.
+
+> **Crucial `FLAC_AX` Gain Rule:** When plugging `16–32 Ω` IEMs into `hw:CARD=FC3,DEV=0`, buy the **`3.5 mm`** cable version and drop volume to **`--volume 0.20–0.25`** before playback. Choose the **`USB-C DSP`** editions (which embed a `24-bit/96kHz` DAC inside the USB-C plug) for standalone 2-in-1 use on phones/PCs without a separate dongle.
 
 | Category & Model | UK Price | Driver Topology | Impedance / Sensitivity | Built-In USB-C DAC? | Best Use Case |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -151,16 +156,19 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 ## 📐 Section 6: Physical Acoustics, OFC Cabling & Gain Staging
 
 ### 6.1 Nearfield Desk Geometry & Boundary EQ
+
 1. **Equilateral Triangle & Toe-In:** Space left and right tweeters `70–100 cm` apart matching the distance to your ears, angled inward (`toe-in`) by `15°–20°`.
 2. **Acoustic Isolation Pads (~£10–£15):** Raise tweeters to ear height on angled foam isolation pads to prevent `150–400 Hz` desk-bounce chestiness and cabinet vibration transfer.
 3. **Rear-Wall Boundary Control:** Leave `15–25 cm` behind rear-ported speakers (Q Acoustics 3010i/3020c, Mission LX-1/LX-2 MKII) or insert the included **foam port bungs** (or choose the front-ported **Wharfedale Diamond 9.0** / downward-ported **Diamond 220**).
 4. **Desktop OS Subtractive EQ (When Not Using Bare-Metal `flac_ax`):** Cut `-2.5` to `-4.0 dB` at `100–140 Hz` (`Q=2.0`) for rear-wall boom; `-2.0` to `-3.0 dB` at `220–320 Hz` (`Q=2.5`) for desk bounce; `-1.0` to `-1.5 dB` high shelf (`6–10 kHz`) for nearfield tweeter glare. *(Note: Bare-metal `flac_ax` bypasses all host-side DSP for bit-perfect `S32_LE`/DoP playback—rely on physical placement.)*
 
 ### 6.2 OFC Speaker Cable + 4 mm Banana Plugs
+
 * **Pure Oxygen-Free Copper (OFC) vs. CCA:** Avoid thin `24 AWG` copper-clad aluminium (CCA) wire (`~55%` higher resistance). Use pure **16 AWG (`1.3 mm²`) to 14 AWG (`2.0 mm²`) OFC**—such as **QED Classic 42** (`~£1.70/m`) or **QED XT25** (`~£5.99/m`) at Richer Sounds—keeping loop resistance `< 0.05 Ω` to preserve Class-D damping factor and LC filter linearity.
 * **4 mm Banana Plugs (~£10–£15):** Terminate all bare ends with **gold-plated 4 mm banana plugs** (e.g., QED Screwloc or Fisual Easy Fix) so stray copper whiskers cannot bridge tightly spaced mini-amp binding posts and short-circuit the TPA3116/TPA3255 output stage. Strictly match **Red (`+`) to Red (`+`)** and **Black (`–`) to Black (`–`)**.
 
 ### 6.3 Gain-Staging Summary
+
 * **Speaker Mode:** Set `flac_ax --volume 0.80` (and HiBy FC3 hardware buttons near max) so the DAC outputs a clean `~1.6–2.0 Vrms` signal, then control room volume solely on the amplifier's physical dial (always turn the amp knob down before powering on).
 * **High-Impedance Open-Back (`120 Ω` HD 560S):** Start at `--volume 0.65–0.80`.
 * **Sensitive IEMs / Low-Impedance (`16–32 Ω` Chu II, Zero:2, HD400S):** Always drop to `--volume 0.20–0.25` before plugging in.
@@ -388,3 +396,8 @@ ps -eLo pid,cls,rtprio,psr,comm | grep ax_av_studio
 1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (plus disable Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.
 2. **Match Sample Rate / WASAPI Exclusive:** Set default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies), or enable **WASAPI Exclusive Mode** in Foobar2000/MusicBee.
 3. **Gain Staging:** Keep Windows volume at **100%** when feeding a `TPA3116`/`TPA3255` speaker amp and adjust volume via the physical amp dial; drop Windows volume to **20–30%** before plugging in sensitive `16–18 Ω` IEMs/headphones.
+## 🪟 Section 9: Windows 10/11 Dual-Boot Fallback Setup
+
+1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (plus disable Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.
+2. **Match Sample Rate / Exclusive Bit-Exact Mode:** Set the default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies). For bit-perfect, bypass-mixer playback, use **ASIO** (`FlexASIO` in Exclusive mode targeting the HiBy FC3 `VID 0x32BB`) or **WASAPI Exclusive Mode** in Foobar2000 / MusicBee / `flac_ax`.
+3. **Gain Staging:** Keep Windows master volume at **100%** when feeding a `TPA3116` speaker amplifier and control listening level solely via the physical amp dial; drop Windows volume to **20–30%** before plugging in sensitive `16–18 Ω` IEMs or headphones.
