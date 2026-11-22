@@ -188,6 +188,19 @@ public:
         pending_r_ = 0U;
     }
 
+    void PackStereoFrame(std::uint16_t dsd_l_msb_first,
+                         std::uint16_t dsd_r_msb_first,
+                         std::int32_t& out_l,
+                         std::int32_t& out_r) noexcept {
+        const std::uint8_t marker = NextMarker();
+        const auto l0 = static_cast<std::uint8_t>((dsd_l_msb_first >> 8) & 0xFFU);
+        const auto l1 = static_cast<std::uint8_t>(dsd_l_msb_first & 0xFFU);
+        const auto r0 = static_cast<std::uint8_t>((dsd_r_msb_first >> 8) & 0xFFU);
+        const auto r1 = static_cast<std::uint8_t>(dsd_r_msb_first & 0xFFU);
+        out_l = static_cast<std::int32_t>(Pack24WithMarker(marker, l0, l1));
+        out_r = static_cast<std::int32_t>(Pack24WithMarker(marker, r0, r1));
+    }
+
     std::size_t PackBytes(const std::uint8_t* src_bytes,
                           std::size_t src_count,
                           std::uint32_t* dst_words,
@@ -404,4 +417,396 @@ private:
 };
 
 } // namespace flac_ax::ess
+```[cite: 52, 55]
 
+### 2. `src/main.cpp`
+
+```cpp
+// src/main.cpp — Headless Bit-Perfect ESS Sabre FLAC & DoP (DSD64/DSD128) Player
+#include "ess_dac_hooks.hpp"
+
+#if !defined(_WIN32)
+#include "dsd_dop_reader.hpp"
+#include "preload_policy.hpp"
+
+#include <FLAC++/decoder.h>
+#include <alsa/asoundlib.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sched.h>
+#include <signal.h>
+#include <sys/file.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#else
+#include <csignal>
+#endif
+
+#include <algorithm>
+#include <atomic>
+#include <charconv>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
+
+#if !defined(_WIN32) && defined(FLAC_AX_HAS_AX_SDK)
+#if __has_include(<ax/config.hpp>) && __has_include(<ax/telemetry.hpp>)
+#include <ax/config.hpp>
+#include <ax/telemetry.hpp>
+#define FLAC_AX_MAIN_HAVE_TELEMETRY 1
+#endif
+#endif
+
+namespace {
+
+std::atomic<bool> g_running{true};
+
+bool ParseUint32(std::string_view text, std::uint32_t& out) noexcept {
+    if (text.empty()) return false;
+    std::uint32_t value = 0U;
+    const auto* begin = text.data();
+    const auto* end = text.data() + text.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    if (ec != std::errc{} || ptr != end) return false;
+    out = value;
+    return true;
+}
+
+bool ParseDouble(std::string_view text, double& out) noexcept {
+    if (text.empty()) return false;
+    std::string buf(text);
+    char* end_ptr = nullptr;
+    const double val = std::strtod(buf.c_str(), &end_ptr);
+    if (end_ptr == buf.c_str() || *end_ptr != '\0' || !std::isfinite(val)) {
+        return false;
+    }
+    out = val;
+    return true;
+}
+
+void OnSignal(int /*sig*/) noexcept {
+    g_running.store(false, std::memory_order_release);
+}
+
+void InstallSignals() noexcept {
+#if !defined(_WIN32)
+    struct sigaction sa {};
+    sa.sa_handler = OnSignal;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0; // Do not SA_RESTART so SIGUSR1 / SIGINT / SIGTERM wake promptly
+    sigaction(SIGINT, &sa, nullptr);
+    sigaction(SIGTERM, &sa, nullptr);
+    sigaction(SIGUSR1, &sa, nullptr); // Yield DAC cleanly when an emulator launches
+#else
+    std::signal(SIGINT, OnSignal);
+    std::signal(SIGTERM, OnSignal);
+#endif
+}
+
+void PinThread(int core_id, int fifo_prio) noexcept {
+#if !defined(_WIN32)
+    if (core_id >= 0) {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(static_cast<unsigned int>(core_id), &set);
+        pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+    }
+    if (fifo_prio > 0) {
+        sched_param sp{};
+        sp.sched_priority = fifo_prio;
+        pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
+    }
+#else
+    (void)core_id;
+    (void)fifo_prio;
+#endif
+}
+
+struct StreamMeta {
+    std::atomic<unsigned int> sample_rate{48000U};
+    std::atomic<unsigned int> channels{2U};
+    std::atomic<unsigned int> bits_per_sample{24U};
+    std::atomic<bool> is_dop{false};
+    std::atomic<bool> format_changed{false};
+};
+
+// Lock-free SPSC stereo S32_LE frame ring buffer
+class StereoFrameRing {
+public:
+    explicit StereoFrameRing(std::size_t capacity_frames = 262144U)
+        : capacity_(capacity_frames), buf_(capacity_frames * 2U, 0) {}
+
+    void Clear() noexcept {
+        write_pos_.store(0U, std::memory_order_relaxed);
+        read_pos_.store(0U, std::memory_order_release);
+    }
+
+    std::size_t WriteFrames(const std::int32_t* interleaved_lr, std::size_t frames) noexcept {
+        std::size_t w = write_pos_.load(std::memory_order_relaxed);
+        const std::size_t r = read_pos_.load(std::memory_order_acquire);
+        const std::size_t avail = (r + capacity_ - 1U - w) % capacity_;
+        const std::size_t to_write = std::min(frames, avail);
+
+        for (std::size_t i = 0; i < to_write; ++i) {
+            const std::size_t idx = (w + i) % capacity_;
+            buf_[idx * 2U + 0U] = interleaved_lr[i * 2U + 0U];
+            buf_[idx * 2U + 1U] = interleaved_lr[i * 2U + 1U];
+        }
+        write_pos_.store((w + to_write) % capacity_, std::memory_order_release);
+        return to_write;
+    }
+
+    std::size_t ReadFrames(std::int32_t* interleaved_lr, std::size_t max_frames) noexcept {
+        const std::size_t w = write_pos_.load(std::memory_order_acquire);
+        std::size_t r = read_pos_.load(std::memory_order_relaxed);
+        const std::size_t avail = (w + capacity_ - r) % capacity_;
+        const std::size_t to_read = std::min(max_frames, avail);
+
+        for (std::size_t i = 0; i < to_read; ++i) {
+            const std::size_t idx = (r + i) % capacity_;
+            interleaved_lr[i * 2U + 0U] = buf_[idx * 2U + 0U];
+            interleaved_lr[i * 2U + 1U] = buf_[idx * 2U + 1U];
+        }
+        read_pos_.store((r + to_read) % capacity_, std::memory_order_release);
+        return to_read;
+    }
+
+private:
+    const std::size_t capacity_;
+    std::vector<std::int32_t> buf_;
+    alignas(64) std::atomic<std::size_t> write_pos_{0U};
+    alignas(64) std::atomic<std::size_t> read_pos_{0U};
+};
+
+#if !defined(_WIN32)
+inline std::int32_t PcmSampleToS32(FLAC__int32 sample, unsigned int bps) noexcept {
+    if (bps >= 32U) {
+        return static_cast<std::int32_t>(sample);
+    }
+    if (bps > 0U) {
+        const unsigned int shift = 32U - bps;
+        return static_cast<std::int32_t>(static_cast<std::uint32_t>(sample) << shift);
+    }
+    return 0;
+}
+
+// DsdTrackSession sits right ahead of PersistentDecoderWorker so Core 5 can stream .dsf / .dff DoP
+struct DsdTrackSession {
+    bool active{false};
+    flac_ax::dsd::DsdStreamInfo info{};
+    flac_ax::dsd::DsdDopStreamer streamer{};
+    FILE* file_handle{nullptr};
+
+    void Close() noexcept {
+        active = false;
+        info = {};
+        if (file_handle != nullptr) {
+            std::fclose(file_handle);
+            file_handle = nullptr;
+        }
+    }
+
+    ~DsdTrackSession() {
+        Close();
+    }
+
+    bool TryOpenMemory(const std::uint8_t* data, std::uint64_t size) noexcept {
+        Close();
+        flac_ax::dsd::DsdStreamInfo parsed{};
+        if (!flac_ax::dsd::ParseDsdMemoryHeader(data, size, parsed)) {
+            return false;
+        }
+        info = parsed;
+        streamer.Configure(info, data, size, nullptr);
+        active = true;
+        return true;
+    }
+
+    bool TryOpenFile(const std::string& path) {
+        Close();
+        flac_ax::dsd::DsdStreamInfo parsed{};
+        if (!flac_ax::dsd::ParseDsdFileHeader(path, parsed)) {
+            return false;
+        }
+        FILE* fp = std::fopen(path.c_str(), "rb");
+        if (fp == nullptr) {
+            return false;
+        }
+        info = parsed;
+        file_handle = fp;
+        streamer.Configure(info, nullptr, 0U, file_handle);
+        active = true;
+        return true;
+    }
+};
+
+class FlacRingDecoder final : public FLAC::Decoder::File {
+public:
+    FlacRingDecoder(StereoFrameRing& ring, StreamMeta& meta) noexcept
+        : ring_(ring), meta_(meta) {}
+
+    void metadata_callback(const ::FLAC__StreamMetadata* metadata) override {
+        if (metadata != nullptr && metadata->type == ::FLAC__METADATA_TYPE_STREAMINFO) {
+            const auto& si = metadata->data.stream_info;
+            const unsigned int ch = (si.channels > 0U) ? si.channels : 2U;
+            const unsigned int sr = (si.sample_rate > 0U) ? si.sample_rate : 48000U;
+            const unsigned int bps = (si.bits_per_sample > 0U) ? si.bits_per_sample : 24U;
+
+            meta_.channels.store(ch, std::memory_order_relaxed);
+            meta_.bits_per_sample.store(bps, std::memory_order_relaxed);
+            meta_.is_dop.store(false, std::memory_order_relaxed);
+            if (meta_.sample_rate.exchange(sr, std::memory_order_acq_rel) != sr) {
+                meta_.format_changed.store(true, std::memory_order_release);
+            }
+        }
+    }
+
+    ::FLAC__StreamDecoderWriteStatus write_callback(const ::FLAC__Frame* frame,
+                                                    const FLAC__int32* const buffer[]) override {
+        if (frame == nullptr || buffer == nullptr) {
+            return ::FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+        }
+        const unsigned int ch = (frame->header.channels > 0U) ? frame->header.channels : 2U;
+        const unsigned int bps = (frame->header.bits_per_sample > 0U) ? frame->header.bits_per_sample : 24U;
+        const std::size_t n_frames = static_cast<std::size_t>(frame->header.blocksize);
+
+        if (interleaved_.size() < n_frames * 2U) {
+            interleaved_.resize(n_frames * 2U, 0);
+        }
+
+        for (std::size_t i = 0; i < n_frames; ++i) {
+            const FLAC__int32 l = buffer[0][i];
+            const FLAC__int32 r = (ch >= 2U && buffer[1] != nullptr) ? buffer[1][i] : l;
+            interleaved_[i * 2U + 0U] = PcmSampleToS32(l, bps);
+            interleaved_[i * 2U + 1U] = PcmSampleToS32(r, bps);
+        }
+
+        std::size_t offset = 0U;
+        while (offset < n_frames && g_running.load(std::memory_order_acquire)) {
+            const std::size_t pushed =
+                ring_.WriteFrames(interleaved_.data() + offset * 2U, n_frames - offset);
+            offset += pushed;
+            if (pushed == 0U) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
+
+        return g_running.load(std::memory_order_acquire)
+                   ? ::FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE
+                   : ::FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+    }
+
+    void error_callback(::FLAC__StreamDecoderErrorStatus status) override {
+        std::cerr << "[FLAC_AX] Decoder error: " << ::FLAC__StreamDecoderErrorStatusString[status] << "\n";
+    }
+
+private:
+    StereoFrameRing& ring_;
+    StreamMeta& meta_;
+    std::vector<std::int32_t> interleaved_;
+};
+
+class PersistentDecoderWorker {
+public:
+    PersistentDecoderWorker(StereoFrameRing& ring,
+                            StreamMeta& meta,
+                            std::vector<std::string> tracks,
+                            int pin_core = 5)
+        : ring_(ring), meta_(meta), tracks_(std::move(tracks)), pin_core_(pin_core) {}
+
+    void Start() {
+        worker_ = std::thread([this]() { RunLoop(); });
+    }
+
+    void Join() {
+        if (worker_.joinable()) {
+            worker_.join();
+        }
+    }
+
+private:
+    void RunLoop() {
+        PinThread(pin_core_, 0);
+        flac_ax::RamFilePreloader preloader(flac_ax::DetectHostPreloadPolicy());
+        DsdTrackSession dsd_session;
+        FlacRingDecoder flac_dec(ring_, meta_);
+        std::vector<std::int32_t> dop_chunk(2048U * 2U, 0);
+
+        for (std::size_t idx = 0; idx < tracks_.size(); ++idx) {
+            if (!g_running.load(std::memory_order_acquire)) {
+                break;
+            }
+
+            const std::string& path = tracks_[idx];
+            dsd_session.Close();
+            preloader.RefreshWindow(tracks_, idx);
+            const flac_ax::RamFilePreloader::Entry* mem_entry = preloader.Find(path);
+
+            bool opened_dsd = false;
+            if (mem_entry != nullptr && !mem_entry->bytes.empty()) {
+                opened_dsd = dsd_session.TryOpenMemory(
+                    mem_entry->bytes.data(), static_cast<std::uint64_t>(mem_entry->bytes.size()));
+            }
+            if (!opened_dsd) {
+                opened_dsd = dsd_session.TryOpenFile(path);
+            }
+
+            if (opened_dsd && dsd_session.active) {
+                meta_.channels.store(2U, std::memory_order_relaxed);
+                meta_.bits_per_sample.store(24U, std::memory_order_relaxed);
+                meta_.is_dop.store(true, std::memory_order_relaxed);
+                if (meta_.sample_rate.exchange(dsd_session.info.dop_pcm_rate_hz,
+                                               std::memory_order_acq_rel) != dsd_session.info.dop_pcm_rate_hz) {
+                    meta_.format_changed.store(true, std::memory_order_release);
+                }
+
+                while (g_running.load(std::memory_order_acquire)) {
+                    const std::size_t n_frames =
+                        dsd_session.streamer.ReadDopFramesS32(dop_chunk.data(), 2048U);
+                    if (n_frames == 0U) {
+                        break;
+                    }
+                    std::size_t off = 0U;
+                    while (off < n_frames && g_running.load(std::memory_order_acquire)) {
+                        const std::size_t pushed =
+                            ring_.WriteFrames(dop_chunk.data() + off * 2U, n_frames - off);
+                        off += pushed;
+                        if (pushed == 0U) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                        }
+                    }
+                }
+                dsd_session.Close();
+                continue;
+            }
+
+            if (flac_dec.init(path.c_str()) == ::FLAC__STREAM_DECODER_INIT_STATUS_OK) {
+                flac_dec.process_until_end_of_stream();
+                flac_dec.finish();
+            } else {
+                std::cerr << "[FLAC_AX] Skipping unreadable track: " << path << "\n";
+            }
+        }
+    }
+
+    StereoFrameRing& ring_;
+    StreamMeta& meta_;
+    std::vector<std::string> tracks_;
+    int pin_core_{5};
+    std::thread worker_;
+};
+
+bool ConfigurePlayerAlsa(snd_pcm_t* pcm,
+                         const flac_ax::ess::EssChipProfile& chip,
+                         unsigned int target_rate_hz,
+                         snd_pcm_uframes_t period_frames,
+                         bool is_dop,
+                         unsigned int& out_rate,
+                         snd_pcm_uframes_t& out_
