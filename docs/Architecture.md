@@ -93,3 +93,42 @@ On the reference 6-core i5-9600K topology (`coffee_lake_9600k` in `ax-sdk`), `FL
 
 1. **Build Targets (`CMakeLists.txt`):** Builds `flac_ax` (`src/main.cpp`) plus configurable `ax_av_studio` (`FLAC_AX_BUILD_AV_STUDIO=ON`), `ax_video_upscaler` (`FLAC_AX_BUILD_VIDEO_UPSCALER=ON`), and `ax_appliance_tui` (`FLAC_AX_BUILD_APPLIANCE_TUI=ON`), linking `ax::core` (`ax-sdk v1_36_1` via `find_package(ax-sdk)` with `FetchContent` fallback), `FLAC++` / `FLAC`, `asound`, and optional `SDL2` + `OpenGL` (`FLAC_AX_ENABLE_SDL2_GL` / `FLAC_AX_HAS_SDL2_GL`).
 2. **ESS Sabre & Multi-DAC Hardware Hooks, DoP Packer & Mixer (`src/ess_dac_hooks.hpp` & `src/dsd_dop_reader.hpp`):**
+   * Resolves `ES9281AC Pro` (`2.0 Vrms` `fc3_2v0` and `1.3 Vrms` `fc3_1v3`) and `ES9281PRO` profiles (`MakeEssProfile`, `ResolveEssChipHook`), recommended load volumes (`RecommendedVolumeForTarget` for `Speakers`, `SpeakersFc3_1v3`, `GradoSr325x`, `HeadphonesHighZ`, `HeadphonesClosed`, and `LowOhmIem`), sample rate negotiation (`NegotiateEssRate` within `[44100 Hz, 384000 Hz]`), and buffer period counts (`RecommendedBufferPeriods`: `8` at `>= 176.4 kHz`, `4` otherwise).
+   * Provides `DopPacker` (`0x05` / `0xFA` markers, `PackStereoFrame`, `PackStereoInterleaved`) and `ParseDsdMemoryHeader` / `ParseDsdFileHeader` / `DsdDopStreamer` for `.dsf` and `.dff` streams.
+   * Provides `EssHardwareMixer` (`--volume` / `--mixer-card`) to control ALSA hardware playback volume on the active card (`FC3` default).
+3. **Akai MPK Mini MK3 ALSA RawMIDI & OLED Feedback (`src/midi/mpk_mini3.hpp`, `.cpp` & `src/midi/mpk_mini3_oled.hpp`):**
+   * Auto-discovers `MPKmini3` in `/proc/asound/cards` (`hw:CARD=MPKmini3,DEV=0`), reads non-blocking ALSA RawMIDI on Core 5, parses running status + SysEx framing (`0xF0..0xF7`), and pushes events into a 1,024-entry lock-free SPSC queue.
+   * `MpkMini3OledFeedback` rate-limits (`45 ms` default interval) off-RT parameter/SysEx feedback for K1–K8 (`CC 70–77`).
+4. **Synthesizer & Effects DSP (`src/dsp/full_feature_synth.hpp`, `src/dsp/stereo_reverb_dsp.hpp`, `src/dsp/tape_delay_dsp.hpp` & `src/dsp/avx2_synth.hpp/.cpp`):**
+   * `FullFeatureSynthEngine` (used by `studio_main.cpp`) runs 16 melodic voices + 8 drum voices, a 2-pole SVF low-pass filter + soft saturation, `StereoReverbDsp`, `TapeDelayDsp`, and a 1024-point Hann-windowed radix-2 FFT + 256-sample stereo scope into double-buffered `VisualSnapshot` slots.
+   * `PolySynthEngine` (`src/dsp/avx2_synth.hpp/.cpp`) provides the standalone 16-voice saw+sub + 2-pole SVF + 1024-pt FFT engine.
+5. **720p/1080p/2K Video Upscaler & Audio-Master Sync (`src/video/video_upscaler_main.cpp` & `src/video/*.hpp`):**
+   * Resolves hardware guardrails via `Resolve720pGuardrails` (`5.50 GiB` VRAM ceiling, `5.00 GiB` reap trigger, `0x20` storage/aux mask).
+   * Captures live retro video on Core 5 via `V4l2LiveCaptureSource` (`YUYV` / `MJPEG` MMAP) using double-buffered `FrameSlot` entries protected by per-slot atomic sequence counters (`std::atomic<uint64_t> seq`) and `last_consumed_seq_` so Core 1 never reads a torn frame.
+   * Paces frames via `AudioMasterPtsSync` (`AudioMasterDvd` / `LiveLowLatency`) against the ESS audio clock, and runs `Core1UpscaleStage` on Core 1 with OpenGL 3.3 Core shaders (`kUpscale720pFragmentShader`), fullscreen triangle VAO, and planar `Y` (`GL_R8`) + `UV` (`GL_RG8`) texture uploads (`240p`, `bob`, `dvd` scan modes).
+6. **Core 5 Coffee/Espresso Appliance TUI (`src/appliance_tui_main.cpp` & `src/tui/appliance_tui.hpp`):**
+   * Zero-dependency 24-bit ANSI TrueColor TUI pinned to Core 5 (`0x20`) matching the Piccolo-AX Espresso palette (`#0B0806` background, `#C88A55` coffee accent, `#F4EDE4` cream text), displaying live `/run/lock/ax-dac.lock` state, RAM/thermal telemetry, and clean mode handoff to `launch-desktop.sh`.
+7. **Shared DAC Arbitration (`src/studio_main.cpp`, `src/main.cpp`, `src/video/video_upscaler_main.cpp`):** Coordinates exclusive access to the active DAC via `/run/lock/ax-dac.lock` (`flock(LOCK_EX | LOCK_NB)`) and `SIGINT`/`SIGTERM`/`SIGUSR1` handlers (triggered automatically by `axGenerator.py` on emulator launch).
+
+---
+
+## 🌐 4. Wider Silicon Preservation Society Repo Topology
+
+`FLAC_AX` integrates with `ax-sdk` (`v1_36_1`), `Piccolo-AX` (`batocera-ax-external`), `piccolo-ax-desktop`, `Generation-X-AX`, `Cemu-Latte-AX`, and `Eden-Espresso-Wave-AX` across the Silicon Preservation Society ecosystem, sharing `ax-sdk` profiles/core topology, multi-DAC `udev` isolation (`99-ax-usb-dacs.rules`), and `/run/lock/ax-dac.lock` DAC arbitration.
+
+---
+
+## ✅ 5. Current Status & Next Steps
+
+### 📦 Delivered in Current Tree
+
+* All four build targets wired in `CMakeLists.txt` (`flac_ax`, `ax_av_studio`, `ax_video_upscaler` at `src/video/video_upscaler_main.cpp`, and `ax_appliance_tui` at `src/appliance_tui_main.cpp`) with `FLAC_AX_ENABLE_SDL2_GL` / `FLAC_AX_HAS_SDL2_GL`.
+* Thread-safe lock-free `FrameSlot` seqlock handoff (`Core 5` -> `Core 1`) in `src/video/v4l2_live_capture.hpp` and validated `ParseDouble` / `ParseUint32` CLI parsing across `main.cpp`, `studio_main.cpp`, and `video_upscaler_main.cpp`.
+* Complete OpenGL 3.3 Core shader compilation (`kUpscale720pFragmentShader`) and planar `Y` (`GL_R8`) + `UV` (`GL_RG8`) texture upload pipeline in `Core1UpscaleStage::RenderFrame` (`src/video/video_upscaler_main.cpp`).
+* Both HiBy FC3 revisions (`2.0 Vrms` `fc3_2v0` `--volume 0.80` and early `1.3 Vrms` `fc3_1v3` `--volume 0.95`) supported in `src/ess_dac_hooks.hpp`, `docs/DACS.md`, and `Piccolo-AX` (`package/flac-ax/`, `99-ax-usb-dacs.rules`, and `ax-mode-cli`).
+
+### 🧪 Next Steps (Hardware Validation on Target Silicon)
+
+1. **Compile & Link Smoke Test:** Run `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release && ninja -C build -j 4` on the build host to verify clean compilation across all four targets.
+2. **Bare-Metal `6.12-rt` Hardware Gate:** Boot the `Piccolo-AX` image on the i5-9600K / GTX 980 Ti / HiBy FC3 bench and run `/usr/bin/verify_ax_appliance.sh` (`nohz_full=0-4`, `0` xruns at `96` frames / `2.00 ms`, and `/run/lock/ax-dac.lock` handoff).
+3. **Live V4L2 MS2130S Capture Validation:** Test `ax_video_upscaler --mode retro --preset 1080p --v4l2 /dev/video0 --scan bob` against live HDMI capture input to verify `AudioMasterPtsSync` drift (`av_delta_us`) and seqlock frame pacing.
