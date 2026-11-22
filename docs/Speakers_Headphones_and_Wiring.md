@@ -45,7 +45,7 @@ A bit-perfect **HiBy FC3 (`VID 0x32BB`)** or **TRN Black Pearl (`Dual CS43131`)*
 
 ## 🎧 Section 2: Wired Headphones & IEMs (`1.5–2.00 ms` Direct from DAC)
 
-For late-night listening, surgical `ax_av_studio` synth patching, or critical `flac_ax` evaluation straight from the **HiBy FC3** (`2.0 Vrms`, `112 mW @ 32 Ω`) or **TRN Black Pearl** (`2.0 Vrms` SE / `4.0 Vrms` balanced), wired open-back headphones and IEMs deliver sub-2 ms transient accuracy without external amplifiers.
+For late-night listening, surgical `ax_av_studio` synth patching, or critical `flac_ax` evaluation straight from the **HiBy FC3** (`2.0 Vrms` / `112 mW @ 32 Ω` standard revision at `--volume 0.80` for Class-D speaker amps, or early `1.3 Vrms` / `70 mW @ 32 Ω` revision at `--volume 0.95` / `AX_DAC_VOL=0.95`), **TRN Black Pearl** (`2.0 Vrms` SE / `4.0 Vrms` balanced), or **FiiO KA11** (`2.5 Vrms` / `200 mW @ 32 Ω`, `--volume 0.72` on speaker amps), wired open-back headphones and IEMs deliver sub-2 ms transient accuracy without external amplifiers.
 
 ### 💸 Tier 0 / Tier 1 (Budget Desk & Portable, £16–£39): Moondrop Chu II & Koss Porta Pro
 
