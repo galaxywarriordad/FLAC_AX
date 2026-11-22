@@ -1,116 +1,125 @@
-# Piccolo \[AX\] Transducer & Cabling Guide: Speakers, Headphones & Wiring Under £150 (Richer Sounds UK)
+# 🔊 Piccolo \[AX\] Transducer & Cabling Guide: Speakers, Headphones & Wiring (Richer Sounds UK)
 
-**Pair your Piccolo \[AX\] USB DAC and Class D speaker amplifier with the Wharfedale Diamond 220 (£149) for pure acoustic neutrality, the Q Acoustics 3010i (£119) for compact desktop placement, or the JBL Control One (£99) for rugged nearfield monitoring—complemented by wired headphones from Koss (£39), Grado (£99–£119), and Sennheiser (£99), proper equilateral triangle desk placement with basic room-boundary EQ, and 16–14 AWG oxygen-free copper (OFC) speaker cables terminated with 4 mm banana plugs.**
+**Anchor your `Piccolo [AX]` system around the Tier 2 Reference Rig—pairing the HiBy FC3 (`VID 0x32BB`) and compact Nobsound Q10 Class-D amplifier with the front-ported Wharfedale Diamond 9.0 (`£99`) and open-back Grado SR325x (`£299`)—or scale cleanly across entry JBL Control One (`£99`), wide-stage Q Acoustics 3010i (`£119`), and downward-ported Wharfedale Diamond 220 (`£149`) speakers using pre-terminated `£6.45` HiFi banana-plug cables.**
 
-A bit-perfect **HiBy FC3 (`VID 0x32BB`)** or **Cirrus Logic CS43131** front-end feeding a clean **Class D amplifier** (such as the **Nobsound NS-20G** or **Fosi Audio V3**) is only as transparent as the transducers and cabling at the end of the chain. Because **Richer Sounds UK** stocks proven hi-fi bookshelf speakers, open-back headphones, and bulk OFC speaker cable with a 6-year guarantee, builders can complete an entire **Piccolo \[AX\]** listening rig without overspending.
-
----
-
-## 1\. Passive Bookshelf Speakers Under £150 (Richer Sounds UK)
-
-### Tier 1 (Ultra-Budget, £99): JBL Control One
-
-* **UK Price:** \~£99 (Pair) \| **Impedance / Sensitivity:** 8 Ω / 89 dB \| **Enclosure:** Sealed / Front-ported compact monitor  
-* **Why It Fits Piccolo \[AX\]:** Originally engineered as a rugged studio and broadcast nearfield monitor, the **JBL Control One** includes wall/desk mounting brackets out of the box and presents an easy **8 Ω load** with **89 dB sensitivity**. Even an ultra-budget **Nobsound NS-20G** (dual TI TPA3116) drives it cleanly to loud desktop levels without strain, delivering crisp transient snap for retro arcade/console soundtracks (`Generation-X-AX`) and live synth work (`ax_av_studio`).  
-* **Trade-Off:** Compact 4-inch woofers roll off below \~80 Hz, prioritizing midrange clarity and punch over deep sub-bass weight.
-
-### Tier 2 (Compact Desktop Sweet Spot, £119): Q Acoustics 3010i
-
-* **UK Price:** \~£119 (Pair, VIP Club) \| **Impedance / Sensitivity:** 6 Ω / 86 dB \| **Enclosure:** Rear-ported (includes foam port bungs)  
-* **Why It Fits Piccolo \[AX\]:** With a narrow **150 mm front baffle** and Point-to-Point™ internal cabinet bracing, the **Q Acoustics 3010i** disappears onto crowded computer desks while projecting a remarkably wide, three-dimensional stereo soundstage. Foam port bungs are included in the box to tame bass boom when placed close to a rear wall.  
-* **Trade-Off:** Slightly lower **86 dB sensitivity** benefits from a higher-current amplifier like the **Fosi Audio V3** (with a 32V/5A or 48V/5A supply) rather than a miniature 19V mini-amp.
-
-### Tier 3 (Reference Hi-Fi Benchmark, £149): Wharfedale Diamond 220
-
-* **UK Price:** \~£149 (Pair, VIP Club) \| **Impedance / Sensitivity:** 8 Ω (4.1 Ω min) / 86 dB \| **Enclosure:** Downward-firing slot-loaded bass reflex  
-* **Why It Fits Piccolo \[AX\]:** A multi-award-winning classic with a woven Kevlar 130 mm bass/mid driver and a **downward-firing slot port** between the cabinet and its integrated plinth. Because bass vents through a calibrated gap at the base rather than firing backward into a wall, the **Diamond 220** is uniquely forgiving of tight desk placement while delivering warm, natural timbre for lossless `flac_ax` album playback.  
-* **Trade-Off:** Deeper cabinet footprint (`255 mm` deep) requires a sturdy desk surface or isolation pads.
-
-### Side-by-Side Speaker Comparison
-
-| Model | Richer Sounds UK Price | Sensitivity | Nominal Impedance | Bass Port Design | Best Class D Amp Pairing |
-| :---- | :---- | :---- | :---- | :---- | :---- |
-| **JBL Control One** | **\~£99** | **89 dB** | 8 Ω | Front / Compact Studio | **Nobsound NS-20G** or Fosi V3 |
-| **Q Acoustics 3010i** | **\~£119** | 86 dB | 6 Ω | Rear Port (Bungs Included) | **Fosi Audio V3** (32V/48V PSU) |
-| **Wharfedale Diamond 220** | **\~£149** | 86 dB | 8 Ω | **Downward Slot Port** | **Fosi Audio V3** or **ZA3** |
+A bit-perfect **HiBy FC3 (`VID 0x32BB`)** or **TRN Black Pearl (`Dual CS43131`)** front-end feeding a compact **`TI TPA3116` Class-D amplifier** (such as the **Nobsound Q10** or **Nobsound NS-01G Pro**) is only as transparent as the transducers and cabling at the end of the chain. Because **Richer Sounds UK** stocks proven British hi-fi bookshelf speakers and open-back headphones backed by a 6-year guarantee, builders can assemble a deterministic, sub-2 ms **Piccolo \[AX\]** listening rig without overspending on bloated amplifiers or oversized cabinets.
 
 ---
 
-## 2\. Wired Headphones Under £150 (Richer Sounds UK)
+## 🔊 Section 1: Passive Bookshelf Speakers Under £150 (Richer Sounds UK)
 
-For late-night gaming, surgical `ax_av_studio` synth patching, or critical `flac_ax` listening straight from the **HiBy FC3** (`112 mW @ 32 Ω`) or **Neat Bumblebee** (`100 mW @ 16 Ω`), open-back wired headphones outperform closed-back gaming headsets in soundstage and tonal accuracy.
+### 🥉 Tier 1 (Entry Nearfield Monitor, £99): JBL Control One
 
-### Tier 1 (Ultra-Budget Retro Classic, £39): Koss Porta Pro
+* **UK Price:** ~£99 (Pair) | **Impedance / Sensitivity:** `8 Ω` / `89 dB` | **Enclosure:** Front-ported / Compact Studio Monitor
+* **Why It Fits `Piccolo [AX]`:** Originally engineered as a rugged broadcast and studio nearfield monitor, the **JBL Control One** includes wall/desk mounting brackets in the box and presents an easy **`8 Ω` load** with high **`89 dB` sensitivity**. Even an entry-level **Nobsound NS-01G Pro** (`~£21`) or **Nobsound Q10** (`~£30–£35`) on a repurposed `19V` laptop PSU drives it effortlessly to crisp desktop levels—giving retro arcade/console soundtracks and live `ax_av_studio` synth patches immediate transient punch.
+* **Trade-Off:** Compact 4-inch woofers roll off below `~80 Hz`, prioritizing midrange clarity and efficiency over deep sub-bass weight.
 
-* **UK Price:** \~£39 \| **Impedance / Sensitivity:** 60 Ω / 101 dB \| **Design:** On-ear open-back  
-* **Why It Fits Piccolo \[AX\]:** Weighing just 60 grams with an iconic 1984 folding headband, the **Koss Porta Pro** delivers punchy, musical warmth with zero listening fatigue. Its **101 dB sensitivity** means even a UK Apple USB-C dongle (`0.5 Vrms`) or older screenless HiBy FC3 drives it effortlessly.
+### 🏆 Tier 2 (`[AX]` Reference Desktop Rig, £99): Wharfedale Diamond 9.0
 
-### Tier 2 (Lively Open-Back Reference, £99–£119): Grado SR60x / SR80x
+* **UK Price:** ~£99 (Pair) | **Impedance / Sensitivity:** `6 Ω` / `86 dB` | **Enclosure:** Front-firing bass reflex
+* **Why It Fits `Piccolo [AX]`:** The benchmark loudspeaker of the **`[AX]` Reference Rig** alongside the **HiBy FC3** and **Nobsound Q10**. Its **front-firing bass-reflex port** eliminates rear-wall bass boom when placed close to a back wall on shallow computer desks, while its woven Kevlar cone delivers warm, natural midrange timbre for lossless `flac_ax` album playback (`32-bit/384kHz` and `DoP` DSD).
+* **Trade-Off:** `86 dB` sensitivity is tuned for intimate `70–100 cm` nearfield listening rather than filling a large living room.
 
-* **UK Price:** \~£99 (**Grado SR60x**) / \~£119 (**Grado SR80x**) \| **Impedance / Sensitivity:** 38 Ω / 99.8 dB \| **Design:** On-ear open-back (Hand-assembled in Brooklyn)  
-* **Why It Fits Piccolo \[AX\]:** Grado's Prestige Series (`4th-generation X drivers` with upgraded magnetic circuits and 4-conductor braided OFC cable) is famous for **immediate transient speed, electric guitar bite, and crystalline vocal/synth presence**. At **38 Ω** and **99.8 dB sensitivity**, both the **SR60x** and **SR80x** pair effortlessly with the **HiBy FC3 (`ES9281AC Pro`)** and **Neat Bumblebee** headphone stage, making them an electric match for `ax_av_studio` subtractive synthesis, retro arcade chiptunes, and rock/acoustic `flac_ax` masters. *(Choosing the **SR80x** at £119 adds tighter sub-bass extension and matched drivers over the £99 **SR60x**.)*
+### 🥈 Tier 3 (Wide-Stage Nearfield Upgrade, £119): Q Acoustics 3010i
 
-### Tier 3 (Analytical Studio Reference, £99–£139): Sennheiser HD 560S
+* **UK Price:** ~£119 (Pair, VIP Club) | **Impedance / Sensitivity:** `6 Ω` / `86 dB` | **Enclosure:** Rear-ported (includes foam port bungs)
+* **Why It Fits `Piccolo [AX]`:** With a narrow **`150 mm` front baffle** and Point-to-Point™ internal cabinet bracing, the **Q Acoustics 3010i** disappears onto crowded desks while projecting a remarkably wide, three-dimensional stereo soundstage. Foam port bungs are included in the box to tame low-end boundary gain near a wall.
+* **Trade-Off:** Deeper `252 mm` cabinet requires `15–25 cm` of rear breathing room (or the included foam port bungs).
 
-* **UK Price:** \~£99 – £139 \| **Impedance / Sensitivity:** 120 Ω / 110 dB \| **Design:** Over-ear open-back  
-* **Why It Fits Piccolo \[AX\]:** Equipped with angled transducers that recreate natural loudspeaker stereo imaging inside an over-ear chassis, the **Sennheiser HD 560S** is a true flat-response studio reference. Despite its **120 Ω** rating, its high **110 dB/V efficiency** allows the **HiBy FC3 with Display (`2.0 Vrms`)** or **Cirrus Logic CS43131** dongle to drive it with generous headroom, exposing subtle reverb tails (`StereoReverbDsp`) and mix flaws without coloration.
+### 🥇 Tier 4 (Studio Neutrality Ceiling, £149): Wharfedale Diamond 220
 
-### Side-by-Side Headphone Comparison
+* **UK Price:** ~£149 (Pair, VIP Club) | **Impedance / Sensitivity:** `8 Ω` (`4.1 Ω` min) / `86 dB` | **Enclosure:** Downward-firing slot-loaded bass reflex
+* **Why It Fits `Piccolo [AX]`:** A multi-award-winning reference standmount featuring a woven Kevlar `130 mm` bass/mid driver and a **downward-firing slot port** between the cabinet and its integrated plinth. Because bass vents through a calibrated gap at the base rather than firing backward into a wall, the **Diamond 220** delivers pure acoustic neutrality regardless of tight desk placement.
+* **Trade-Off:** Deeper `255 mm` footprint benefits from acoustic foam isolation pads and a `24V/4A` regulated PSU on the **Nobsound Q10**.
 
-| Model | Richer Sounds UK Price | Design | Impedance / Sensitivity | Sonic Signature | Best DAC / Amp Match |
-| :---- | :---- | :---- | :---- | :---- | :---- |
-| **Koss Porta Pro** | **\~£39** | On-Ear Open | 60 Ω / 101 dB | Warm, punchy, lightweight | Any DAC (even Apple £9 dongle) |
-| **Grado SR60x / SR80x** | **\~£99 / £119** | On-Ear Open | 38 Ω / 99.8 dB | Fast, energetic, vivid mids/highs | **HiBy FC3** or **Neat Bumblebee** |
-| **Sennheiser HD 560S** | **\~£99 – £139** | Over-Ear Open | 120 Ω / 110 dB | Neutral, analytical, wide stage | **HiBy FC3 (Screen)** or **CS43131** |
+### 📊 Side-by-Side Speaker Comparison
+
+| Model & Tier | Richer Sounds UK Price | Sensitivity | Nominal Impedance | Bass Port Design | Best Class-D Amp Pairing |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **JBL Control One** *(Tier 1 Entry)* | **~£99** | **89 dB** | `8 Ω` | Front / Compact Studio | **Nobsound NS-01G Pro** or **Q10** (`19V`) |
+| **Wharfedale Diamond 9.0** *(Tier 2 Reference)* | **~£99** | 86 dB | `6 Ω` | **Front-Firing Bass Reflex** | **Nobsound Q10** + **HiBy FC3** (`19V–20V`) |
+| **Q Acoustics 3010i** *(Tier 3 Higher)* | **~£119** | 86 dB | `6 Ω` | Rear Port (Bungs Included) | **Nobsound Q10** (`19V–24V`) |
+| **Wharfedale Diamond 220** *(Tier 4 Ceiling)* | **~£149** | 86 dB | `8 Ω` | **Downward Slot Port** | **Nobsound Q10** (`24V/4A` PSU) |
 
 ---
 
-## 3\. Desktop Speaker Placement & Room-Correction EQ Tips
+## 🎧 Section 2: Wired Headphones & IEMs (`1.5–2.00 ms` Direct from DAC)
 
-Even a £149 pair of **Wharfedale Diamond 220** speakers will sound muddy or hollow if placed flat on a desk flush against a wall. Applying three physical positioning adjustments and targeted room-boundary EQ unlocks massive clarity for free:
+For late-night listening, surgical `ax_av_studio` synth patching, or critical `flac_ax` evaluation straight from the **HiBy FC3** (`2.0 Vrms`, `112 mW @ 32 Ω`) or **TRN Black Pearl** (`2.0 Vrms` SE / `4.0 Vrms` balanced), wired open-back headphones and IEMs deliver sub-2 ms transient accuracy without external amplifiers.
+
+### 💸 Tier 0 / Tier 1 (Budget Desk & Portable, £16–£39): Moondrop Chu II & Koss Porta Pro
+
+* **Moondrop Chu II (`3.5 mm`, ~£16–£19):** Metal-shell `18 Ω` (`119 dB/V`) single-dynamic IEM with `-26 dB` passive isolation. Drop `flac_ax --volume` to **`0.20–0.25`** before plugging into the HiBy FC3.
+* **Koss Porta Pro (~£39):** Weighing just `60 g` with an iconic folding headband, this `60 Ω` (`101 dB`) open-ear classic delivers punchy, fatigue-free warmth on any dongle.
+
+### 🎛️ Mid-Tier Reference (£99–£139): Grado SR60x / SR80x & Sennheiser HD 560S
+
+* **Grado SR60x (~£99) / SR80x (~£119):** `38 Ω` / `99.8 dB` on-ear open-backs with 4th-generation X drivers—famous for electric transient speed and vivid midrange presence on `ax_av_studio` synths and arcade chiptunes.
+* **Sennheiser HD 560S (~£99–£139):** `120 Ω` / `110 dB/V` over-ear open-back studio reference with angled transducers and flat analytical response (`--volume 0.65–0.80` on HiBy FC3).
+
+### 🏆 Reference Open-Back Flagship (£299): Grado SR325x
+
+* **UK Price:** **£299** | **Impedance / Sensitivity:** `38 Ω` / `98–99.8 dB` | **Design:** CNC-machined alloy open-ear (`280 g`)
+* **Why It Fits the `[AX]` Reference Rig:** Paired directly with the **HiBy FC3 (`ES9281AC Pro`)** at `--volume 0.50–0.65`, the **Grado SR325x**'s powder-coated aluminium housings eliminate chassis resonance—resolving micro-transients, acoustic timbre, and native `DoP` DSD harmonics with flagship speed.
+
+### 📊 Side-by-Side Headphone & IEM Comparison
+
+| Model | UK Price | Design | Impedance / Sensitivity | Sonic Signature & `FLAC_AX` Gain | Best DAC Match |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Moondrop Chu II (`3.5mm`)** | **~£16 – £19** | Metal IEM (`-26 dB` iso) | `18 Ω` / `119 dB/V` | Balanced metal-shell clarity (`--volume 0.20–0.25`) | **HiBy FC3** or **TRN Black Pearl** |
+| **Koss Porta Pro** | **~£39** | On-Ear Open (`60 g`) | `60 Ω` / `101 dB` | Warm, punchy, lightweight retro comfort | Any DAC (even Apple £9 dongle) |
+| **Grado SR60x / SR80x** | **~£99 / £119** | On-Ear Open | `38 Ω` / `99.8 dB` | Fast, energetic, vivid mids/highs (`--volume 0.50–0.65`) | **HiBy FC3** or **TRN Black Pearl** |
+| **Sennheiser HD 560S** | **~£99 – £139** | Over-Ear Open (`240 g`) | `120 Ω` / `110 dB/V` | Neutral, analytical, wide stage (`--volume 0.65–0.80`) | **HiBy FC3 (OLED)** or **Black Pearl** |
+| **Grado SR325x** *(Reference)* | **£299** | Alloy On-Ear Open (`280 g`) | `38 Ω` / `98–99.8 dB` | Flagship transient snap & DSD detail (`--volume 0.50–0.65`) | **HiBy FC3 (`VID 0x32BB`)** |
+
+---
+
+## 📐 Section 3: Desktop Speaker Placement & Bare-Metal EQ Tips
+
+Even a £149 pair of **Wharfedale Diamond 220** speakers will sound muddy or hollow if placed flat on a desk flush against a wall. Applying three physical positioning adjustments unlocks studio-grade clarity for free:
 
 ### 3.1 Physical Nearfield Geometry (The Equilateral Triangle)
 
-1. **Equilateral Triangle & Toe-In.** Position the left and right speakers so the distance between their tweeters equals the distance from each tweeter to your ears (typically **70 cm – 100 cm** on a desk). Angle ("toe in") both cabinets inward by roughly **15°–20°** so the tweeters point just past your shoulders rather than straight ahead.  
-2. **Raise Tweeters to Ear Height & Decouple from the Desk.** Desktop surfaces act like acoustic mirrors, causing early reflections around **150 Hz – 400 Hz** (chestiness/comb-filtering) and transmitting bass vibrations into the desk. Place speakers on angled **acoustic foam isolation pads** (\~£10–£15) or short desktop stands so the tweeters align vertically with your ears.  
-3. **Manage Rear-Wall Boundary Gain.** Placing rear-ported speakers (like the **Q Acoustics 3010i**) within **15 cm** of a wall boosts bass by **\+3 dB to \+6 dB** around **80 Hz – 150 Hz**. Pull speakers at least **15–25 cm** forward from the wall, or insert the supplied **foam port bungs** (or choose the downward-ported **Wharfedale Diamond 220**) if desk depth is tight.
+1. **Equilateral Triangle & Toe-In:** Position the left and right speakers so the distance between their tweeters equals the distance from each tweeter to your ears (typically **`70 cm – 100 cm`** on a desk). Angle ("toe in") both cabinets inward by roughly **`15°–20°`** so the tweeters aim just past your shoulders.
+2. **Raise Tweeters to Ear Height & Decouple from the Desk:** Desktop surfaces act like acoustic mirrors, causing early reflections around **`150 Hz – 400 Hz`** (chestiness/comb-filtering) and transmitting cabinet vibrations into the desk. Place speakers on angled **acoustic foam isolation pads** (`~£12`) so the tweeters align vertically with your ears.
+3. **Manage Rear-Wall Boundary Gain:** Choose front-ported (**Wharfedale Diamond 9.0**) or downward-ported (**Wharfedale Diamond 220**) cabinets when placing speakers close to a back wall. If using rear-ported **Q Acoustics 3010i** speakers within `15 cm` of a wall, insert the supplied **foam port bungs** to prevent `+3 dB to +6 dB` bass bloat.
 
-### 3.2 Practical Room-Correction EQ Curves (Desk & Wall Compensation)
+### 3.2 Solving the Bare-Metal Room-EQ Paradox (Hardware PEQ vs. Physical Placement)
 
-When using a software parametric equalizer on a desktop OS—or tuning DSP tone controls—apply subtle subtractive cuts rather than heavy boosts to avoid clipping your DAC or Class D amplifier:
+Bare-metal `flac_ax` intentionally bypasses all host-side software DSP and EQ to preserve bit-exact `S32_LE` / `DoP` delivery:
 
-| Acoustic Issue | Typical Frequency | Recommended EQ Adjustment | Why It Works |
-| :---- | :---- | :---- | :---- |
-| **Rear-Wall Bass Boom** | **100 Hz – 140 Hz** | **\-2.5 dB to \-4.0 dB** (`Q = 2.0`) | Removes one-note bass bloat caused by placing cabinets close to a back wall. |
-| **Desk Bounce / Chestiness** | **220 Hz – 320 Hz** | **\-2.0 dB to \-3.0 dB** (`Q = 2.5`) | Cleans up early acoustic reflections bouncing off a hard wooden desk surface. |
-| **Nearfield Brightness** | **6 kHz – 10 kHz** | **\-1.0 dB to \-1.5 dB** (High Shelf) | Softens close-range tweeter glare on bright recordings (especially helpful with **Grado** headphones or **JBL Control One** monitors). |
-
-*(Note for **Piccolo \[AX\] / `flac_ax`** users: `flac_ax` intentionally bypasses all host-side DSP and software EQ to preserve bit-perfect `S32_LE` / DoP playback—rely on physical isolation pads, toe-in, and foam port bungs on bare-metal `[AX]` builds rather than software EQ.)*
+* **With HiBy FC3 (`[AX]` Reference DAC):** Rely purely on physical isolation pads, `15°–20°` toe-in, and the **Wharfedale Diamond 9.0**'s front-firing port—preserving an untouched bit-exact signal chain.
+* **With TRN Black Pearl (`£29.18` Hardware PEQ Option):** Save subtractive parametric EQ curves directly into the DAC's on-board flash via browser (`-2.5` to `-4.0 dB` at `100–140 Hz`, `Q = 2.0` for rear-wall boom; `-2.0` to `-3.0 dB` at `220–320 Hz`, `Q = 2.5` for desk bounce; `-1.0` to `-1.5 dB` high shelf at `6–10 kHz` for nearfield treble glare) with **zero host CPU or latency penalty**.
 
 ---
 
-## 4\. Why Budget OFC Speaker Cable \+ 4 mm Banana Plugs Matter
+## 🔌 Section 4: Pre-Terminated HiFi Speaker Cable (`£6.45`) & Class-D Safety
 
-Spending hundreds on exotic "audiophile" speaker cables is unnecessary, but using ultra-thin **24 AWG copper-clad aluminium (CCA)** bell wire—or twisting bare copper strands into cramped mini-amp terminals—directly degrades Class D amplifier performance and risks hardware damage.
+Spending hundreds on exotic "audiophile" speaker cables is unnecessary, while twisting bare copper strands into cramped mini-amp terminals risks short-circuiting compact Class-D output stages.
 
-### 4.1 Preserving Amplifier Damping Factor & High-Frequency Linearity
+### 4.1 Pre-Terminated 1Pair HiFi RCA to 2 Banana Speaker Cable (`£6.45`)
 
-* **Pure Oxygen-Free Copper (OFC) vs. Copper-Clad Aluminium (CCA).** Cheap unbranded speaker wire uses aluminium cores coated in a thin copper flash (CCA), which has **\~55% higher electrical resistance** than pure copper and corrodes quickly at cut ends. Pure **16 AWG (1.3 mm²) to 14 AWG (2.0 mm²) OFC**—such as **QED Classic 42** (\~£1.70/m) or **QED XT25** (\~£5.99/m) at Richer Sounds—keeps loop resistance below **0.05 Ω** over typical 1.5 m – 3 m desktop runs.  
-* **Protecting Class D Damping Factor & LC Filter Response.** Class D amplifiers (like the **TI TPA3116** in the Nobsound NS-20G or **TI TPA3255** in the Fosi Audio V3) rely on low output impedance to control woofer cone motion (**damping factor**) and use an output LC low-pass filter tuned to the speaker's nominal impedance. High cable resistance degrades bass tightness and subtly alters treble response at the LC filter boundary.
+Instead of buying raw bulk wire and crimping separate plugs, terminate your **Nobsound Q10** or **NS-01G Pro** amplifier with a ready-made stereo speaker cable pair (**2pcs/1Pair HiFi RCA to 2 Banana Speaker Cable for Amplifier — `£6.45`**):
 
-### 4.2 Preventing Short Circuits with 4 mm Banana Plugs
+* **High-Quality HiFi Audio Connection:** Delivers clear, distortion-free signal transmission between your Class-D amplifier and passive speakers.
+* **Compatible with Standard Speaker Systems:** Designed for seamless integration with standard home audio and compact Class-D amplifiers—always match **Red (`+`) to Red (`+`)** and **Black (`–`) to Black (`–`)** polarity.
+* **Multiple Length Options Available:** Available in **0.5 m, 1 m, 1.5 m, 2 m, and 3 m** lengths so you can pick an exact desk span without excess cable coils.
+* **Compact and Durable Design:** Sturdy yet flexible `4.0 mm` outer diameter jacket packaged in a protective, tangle-free polybag.
+* **Simple and Efficient Setup:** Includes a complete **1Pair (two-cable) stereo bundle** for left and right channels straight out of the bag.
 
-* **The Mini-Amp Binding Post Hazard.** Compact Class D amplifiers pack four speaker binding posts tightly together on a small rear chassis. Bare twisted copper strands inevitably fray over time; a single stray copper whisker bridging the positive (`+`) and negative (`-`) terminals—or touching the grounded metal chassis—can trip over-current protection or permanently blow a **TPA3116 / TPA3255** output stage.  
-* **Clean, High-Contact Terminations.** Terminating both ends of your OFC cable with **gold-plated 4 mm banana plugs** (such as **QED Screwloc** or **Fisual Easy Fix** plugs, \~£10–£15 for a pack of 4\) encloses all bare wire inside insulated barrels, prevents copper oxidation, maximizes contact surface area inside the binding post, and lets you swap speakers or amplifiers in seconds without tools.
+### 4.2 Protecting Compact `TPA3116` Amplifiers from Short Circuits
+
+* **Insulated Banana Plug Advantage:** Compact Class-D amplifiers pack four binding posts tightly together on a small rear chassis. Enclosed **4 mm banana plugs** eliminate stray copper whiskers that could otherwise bridge positive (`+`) and negative (`–`) terminals and trip or damage the **`TI TPA3116`** output stage.
+* **Power Supply Discipline:** Power your **Nobsound Q10** or **NS-01G Pro** with a regulated **19V–20V genuine laptop PSU** (`£0–£12`) or regulated **24V/4A** supply—staying safely below `25V` internal smoothing capacitor ratings.
 
 ---
 
-## 5\. Complete Tiered System Blueprints (Richer Sounds \+ Piccolo \[AX\])
+## 🛠️ Section 5: Complete Tiered System Blueprints (Built Around the `[AX]` Reference Rig)
 
-| System Tier | USB Front-End (`Piccolo [AX]`) | Class D Amplifier | Speakers / Headphones | Cabling & Isolation | Approx. Total |
-| :---- | :---- | :---- | :---- | :---- | :---- |
-| **1\. Ultra-Budget** | **Older HiBy FC3** (\~£30 used) or **Apple Dongle** (£9) | **Nobsound NS-20G** (\~£35) | **JBL Control One** (£99) \+ **Koss Porta Pro** (£39) | 3 m **QED Classic 42** (£5) \+ 8× **Banana Plugs** (£12) | **\~£190 – £220** |
-| **2\. Sweet-Spot Hi-Fi** | **New HiBy FC3 w/ Display** (£35) | **Fosi Audio V3** (\~£95) | **Q Acoustics 3010i** (£119) \+ **Grado SR80x** (£119) | 3 m **QED Classic 42** (£5) \+ 8× **Banana Plugs** (£12) \+ Foam Pads (£12) | **\~£397** |
-| **3\. Reference Studio** | **New HiBy FC3 w/ Display** (£35) | **Fosi Audio V3** (48V PSU, \~£105) | **Wharfedale Diamond 220** (£149) \+ **Sennheiser HD 560S** (£99) | 3 m **QED XT25** (£18) \+ 8× **Banana Plugs** (£12) \+ Foam Pads (£12) | **\~£430** |
-
-&nbsp;
+| System Tier & Role | USB Front-End (`Piccolo [AX]`) | Class-D Amp & PSU | Speakers & Personal Audio | Cabling & Isolation | Approx. Total |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tier 0: Sub-£50 IEM Starter** *(Lowest)* | **HiBy FC3** (`£29.67`) *or* **TRN Black Pearl** (`£29.18`) | *None (Direct from DAC)* | **Moondrop Chu II (`3.5mm`)** (`£16–£19`) | *Included* | **~£45 – £49** |
+| **Tier 1: Entry Speaker Rig** *(Lower)* | **HiBy FC3** (`£29.67`) *or* **TRN Black Pearl** (`£29.18`) | **Nobsound NS-01G Pro** (`~£21`) + repurposed 19V Laptop PSU (`£0–£12`) | **JBL Control One** (`~£99`, `89 dB` efficiency) *or* **Wharfedale Diamond 9.0** (`~£99`) | `£6.45` Speaker Cable | **~£156 – £168** |
+| **Tier 2: `[AX]` Reference Rig** *(Baseline Anchor)* | **HiBy FC3 (`VID 0x32BB`)** (`£29.67–£35`) | **Nobsound Q10** (`~£30–£35`) + 19V–20V Laptop PSU (`£0–£12`) | **Wharfedale Diamond 9.0** (`~£99`) + **Grado SR325x** (`£299`) | `£6.45` Speaker Cable | **~£165 – £188** *(Speakers)* / **~£464 – £487** *(Full)* |
+| **Tier 3: Wide-Stage Nearfield** *(Higher)* | **HiBy FC3 OLED** (`£35`) *or* **TRN Black Pearl** (`£29.18`, on-board PEQ) | **Nobsound Q10** (`~£30–£35`) + 19V–20V Laptop PSU (`£12`) | **Q Acoustics 3010i** (`~£119`, narrow `150 mm` baffle + port bungs) + **Sennheiser HD 560S** (`£99`) | `£6.45` Speaker Cable + Foam Pads (`£12`) | **~£297 – £308** |
+| **Tier 4: Studio Reference Ceiling** *(Highest)* | **HiBy FC3 OLED** (`£35`) *or* **TRN Black Pearl** (`£29.18`) | **Nobsound Q10** (`~£30–£35`) + regulated `24V/4A` PSU (`~£18`) | **Wharfedale Diamond 220** (`~£149`, downward slot port) + **Grado SR325x** (`£299`) | `£6.45` Speaker Cable + Foam Pads (`£12`) | **~£543 – £554** *(or **~£244 – £255** speakers-only)* |
