@@ -16,17 +16,21 @@ pkg_check_modules(FLAC REQUIRED IMPORTED_TARGET flac++)
 pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
 
 if(FLAC_AX_USE_AX_SDK)
-    include(FetchContent)
-    set(_ax_proto "https")
-    set(_ax_host "github.com")
-    set(_ax_repo "galaxywarriordad/ax-sdk.git")
-    FetchContent_Declare(
-        ax_sdk
-        GIT_REPOSITORY "${_ax_proto}://${_ax_host}/${_ax_repo}"
-        GIT_TAG        v1_36_1
-        GIT_SHALLOW    TRUE
-    )
-    FetchContent_MakeAvailable(ax_sdk)
+    if(DEFINED FETCHCONTENT_SOURCE_DIR_AX_SDK AND EXISTS "${FETCHCONTENT_SOURCE_DIR_AX_SDK}/CMakeLists.txt")
+        add_subdirectory("${FETCHCONTENT_SOURCE_DIR_AX_SDK}" "${CMAKE_CURRENT_BINARY_DIR}/_deps/ax_sdk-build")
+    else()
+        include(FetchContent)
+        set(_ax_proto "https")
+        set(_ax_host "github.com")
+        set(_ax_repo "galaxywarriordad/ax-sdk.git")
+        FetchContent_Declare(
+            ax_sdk
+            GIT_REPOSITORY "${_ax_proto}://${_ax_host}/${_ax_repo}"
+            GIT_TAG        v1_36_1
+            GIT_SHALLOW    TRUE
+        )
+        FetchContent_MakeAvailable(ax_sdk)
+    endif()
 endif()
 
 set(FLAC_AX_DSD_HEADERS
