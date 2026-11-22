@@ -1,11 +1,15 @@
-// src/ess_dac_hooks.hpp — ESS Sabre (ES9281AC Pro / ES9281PRO) hooks, DoP packer & ALSA mixer control
+// src/ess_dac_hooks.hpp — ESS Sabre (ES9281AC Pro / ES9281PRO) hooks, DSD/DoP packer & ALSA mixer control
 #pragma once
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <optional>
 #include <string>
+#include <string_view>
 
 #if !defined(_WIN32)
 #include <alsa/asoundlib.h>
@@ -18,8 +22,17 @@ enum class EssChipFamily : std::uint8_t {
     Es9281Pro
 };
 
+enum class AudioLoadTarget : std::uint8_t {
+    Speakers = 0,       // 2.0 Vrms DAC -> Nobsound Q10 / NS-01G Pro (0.80 default)
+    GradoSr325x,        // 38 Ohm open-back reference headphones (0.55 default)
+    HeadphonesHighZ,    // ~120 Ohm studio open-back e.g. Sennheiser HD 560S (0.70 default)
+    HeadphonesClosed,   // ~23-48 Ohm closed-back e.g. HD 569 / DJ 300 Pro X (0.50 default)
+    LowOhmIem           // 16-32 Ohm sensitive IEMs / HD400S (0.22 default)
+};
+
 struct EssChipProfile {
     EssChipFamily family{EssChipFamily::Es9281AcPro};
+    const char* chip_name{"ES9281AC Pro"};
     const char* name{"ES9281AC Pro"};
     const char* default_alsa_device{"hw:CARD=FC3,DEV=0"};
     const char* default_mixer_card{"FC3"};
@@ -27,6 +40,14 @@ struct EssChipProfile {
     unsigned int max_rate_hz{384000U};
     unsigned int default_period_frames{96U};
     unsigned int fallback_period_frames{128U};
+    double recommended_volume_speakers{0.80};
+    double recommended_volume_grado_sr325x{0.55};
+    double recommended_volume_headphones_high_z{0.70};
+    double recommended_volume_headphones_closed{0.50};
+    double recommended_volume_low_ohm_iem{0.22};
+    bool supports_dsd64{true};
+    bool supports_dsd128{true};
+    bool supports_dsd256{false};
 #if !defined(_WIN32)
     snd_pcm_format_t preferred_format{SND_PCM_FORMAT_S32_LE};
 #endif
@@ -37,12 +58,21 @@ inline constexpr EssChipProfile MakeEssProfile(EssChipFamily family) noexcept {
         return EssChipProfile{
             EssChipFamily::Es9281Pro,
             "ES9281PRO",
+            "ES9281PRO",
             "hw:CARD=FC3,DEV=0",
             "FC3",
             44100U,
             384000U,
             96U,
-            128U
+            128U,
+            0.80,
+            0.55,
+            0.70,
+            0.50,
+            0.22,
+            true,
+            true,
+            false
 #if !defined(_WIN32)
             , SND_PCM_FORMAT_S32_LE
 #endif
@@ -51,16 +81,59 @@ inline constexpr EssChipProfile MakeEssProfile(EssChipFamily family) noexcept {
     return EssChipProfile{
         EssChipFamily::Es9281AcPro,
         "ES9281AC Pro",
+        "ES9281AC Pro",
         "hw:CARD=FC3,DEV=0",
         "FC3",
         44100U,
         384000U,
         96U,
-        128U
+        128U,
+        0.80,
+        0.55,
+        0.70,
+        0.50,
+        0.22,
+        true,
+        true,
+        false
 #if !defined(_WIN32)
         , SND_PCM_FORMAT_S32_LE
 #endif
     };
+}
+
+inline std::optional<EssChipProfile> ResolveEssChipHook(std::string_view spec) noexcept {
+    std::string lower;
+    lower.reserve(spec.size());
+    for (unsigned char ch : spec) {
+        lower.push_back(static_cast<char>(std::tolower(ch)));
+    }
+
+    if (lower.empty() || lower == "es9281ac_pro" || lower == "es9281ac-pro" ||
+        lower == "es9281acpro" || lower == "fc3" || lower == "hiby_fc3") {
+        return MakeEssProfile(EssChipFamily::Es9281AcPro);
+    }
+    if (lower == "es9281pro" || lower == "es9281_pro" || lower == "es9281-pro") {
+        return MakeEssProfile(EssChipFamily::Es9281Pro);
+    }
+    return std::nullopt;
+}
+
+inline constexpr double RecommendedVolumeForTarget(const EssChipProfile& chip,
+                                                 AudioLoadTarget target) noexcept {
+    switch (target) {
+        case AudioLoadTarget::GradoSr325x:
+            return chip.recommended_volume_grado_sr325x;
+        case AudioLoadTarget::HeadphonesHighZ:
+            return chip.recommended_volume_headphones_high_z;
+        case AudioLoadTarget::HeadphonesClosed:
+            return chip.recommended_volume_headphones_closed;
+        case AudioLoadTarget::LowOhmIem:
+            return chip.recommended_volume_low_ohm_iem;
+        case AudioLoadTarget::Speakers:
+        default:
+            return chip.recommended_volume_speakers;
+    }
 }
 
 inline constexpr unsigned int NegotiateEssRate(const EssChipProfile& chip,
@@ -110,10 +183,11 @@ public:
         toggle_ = false;
         has_pending_ = false;
         pending_byte_ = 0U;
+        has_pending_stereo_ = false;
+        pending_l_ = 0U;
+        pending_r_ = 0U;
     }
 
-    // Encodes a stream of raw DSD bytes (for a single channel) into DoP 32-bit words.
-    // Returns number of 32-bit words written to `dst_words`.
     std::size_t PackBytes(const std::uint8_t* src_bytes,
                           std::size_t src_count,
                           std::uint32_t* dst_words,
@@ -143,9 +217,6 @@ public:
         return written;
     }
 
-    // Packs interleaved L/R raw DSD byte pairs into interleaved L/R DoP 32-bit words.
-    // `src_lr_bytes` contains [L0, R0, L1, R1, ...]. `dst_lr_words` receives [L_dop0, R_dop0, ...].
-    // Returns number of stereo DoP frames written.
     std::size_t PackStereoInterleaved(const std::uint8_t* src_lr_bytes,
                                       std::size_t stereo_byte_pairs,
                                       std::int32_t* dst_lr_words,
@@ -197,8 +268,6 @@ private:
     static std::uint32_t Pack24WithMarker(std::uint8_t marker,
                                           std::uint8_t first_dsd_byte,
                                           std::uint8_t second_dsd_byte) noexcept {
-        // Place 24-bit DoP payload in bits [31:8] (left-aligned for S32_LE container):
-        // bits [31:24] = marker (0x05 / 0xFA), bits [23:16] = first_dsd_byte, bits [15:8] = second_dsd_byte
         return (static_cast<std::uint32_t>(marker) << 24) |
                (static_cast<std::uint32_t>(first_dsd_byte) << 16) |
                (static_cast<std::uint32_t>(second_dsd_byte) << 8);
@@ -335,3 +404,6 @@ private:
 };
 
 } // namespace flac_ax::ess
+```[cite: 25, 27, 28]
+
+Would you like to output the complete updated `hardware_profiles.json` next, or move on to another file?
