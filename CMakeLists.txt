@@ -63,7 +63,7 @@ if(FLAC_AX_USE_AX_SDK)
             FetchContent_Declare(
                 ax_sdk
                 GIT_REPOSITORY "${_ax_proto}://${_ax_host}/${_ax_repo}"
-                GIT_TAG        v1_36_1
+                GIT_TAG        v1_36_2
                 GIT_SHALLOW    FALSE
             )
             FetchContent_MakeAvailable(ax_sdk)
