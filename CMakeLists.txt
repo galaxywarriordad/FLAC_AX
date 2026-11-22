@@ -85,8 +85,10 @@ endif()
 
 # --- 2. Unified [AX] Audio/Visual Synth, Mixer & Spectrum Studio ---
 if(FLAC_AX_BUILD_AV_STUDIO)
-    pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
-    find_package(OpenGL REQUIRED)
+    if(UNIX AND NOT APPLE)
+        pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+        find_package(OpenGL REQUIRED)
+    endif()
 
     add_executable(ax_av_studio
         src/studio_main.cpp
@@ -103,13 +105,15 @@ if(FLAC_AX_BUILD_AV_STUDIO)
         -Wall -Wextra -Wpedantic
     )
 
-    target_link_libraries(ax_av_studio PRIVATE
-        PkgConfig::ALSA
-        PkgConfig::FLAC
-        PkgConfig::SDL2
-        OpenGL::GL
-        pthread
-    )
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(ax_av_studio PRIVATE
+            PkgConfig::ALSA
+            PkgConfig::FLAC
+            PkgConfig::SDL2
+            OpenGL::GL
+            pthread
+        )
+    endif()
 
     if(FLAC_AX_USE_AX_SDK)
         target_link_libraries(ax_av_studio PRIVATE ax::core)
@@ -131,10 +135,12 @@ if(FLAC_AX_BUILD_VIDEO_UPSCALER)
         -Wall -Wextra -Wpedantic
     )
 
-    target_link_libraries(ax_video_upscaler PRIVATE
-        PkgConfig::ALSA
-        pthread
-    )
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(ax_video_upscaler PRIVATE
+            PkgConfig::ALSA
+            pthread
+        )
+    endif()
 
     if(FLAC_AX_USE_AX_SDK)
         target_link_libraries(ax_video_upscaler PRIVATE ax::core)
