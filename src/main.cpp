@@ -1,6 +1,8 @@
 // src/main.cpp — Headless Bit-Perfect ESS Sabre FLAC & DoP (DSD64/DSD128) Player
-#include "dsd_dop_reader.hpp"
 #include "ess_dac_hooks.hpp"
+
+#if !defined(_WIN32)
+#include "dsd_dop_reader.hpp"
 #include "preload_policy.hpp"
 
 #include <FLAC++/decoder.h>
@@ -12,12 +14,17 @@
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#else
+#include <csignal>
+#endif
 
 #include <algorithm>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
@@ -25,7 +32,7 @@
 #include <thread>
 #include <vector>
 
-#if defined(FLAC_AX_HAS_AX_SDK)
+#if !defined(_WIN32) && defined(FLAC_AX_HAS_AX_SDK)
 #if __has_include(<ax/config.hpp>) && __has_include(<ax/telemetry.hpp>)
 #include <ax/config.hpp>
 #include <ax/telemetry.hpp>
@@ -37,11 +44,35 @@ namespace {
 
 std::atomic<bool> g_running{true};
 
+bool ParseUint32(std::string_view text, std::uint32_t& out) noexcept {
+    if (text.empty()) return false;
+    std::uint32_t value = 0U;
+    const auto* begin = text.data();
+    const auto* end = text.data() + text.size();
+    const auto [ptr, ec] = std::from_chars(begin, end, value);
+    if (ec != std::errc{} || ptr != end) return false;
+    out = value;
+    return true;
+}
+
+bool ParseDouble(std::string_view text, double& out) noexcept {
+    if (text.empty()) return false;
+    std::string buf(text);
+    char* end_ptr = nullptr;
+    const double val = std::strtod(buf.c_str(), &end_ptr);
+    if (end_ptr == buf.c_str() || *end_ptr != '\0' || !std::isfinite(val)) {
+        return false;
+    }
+    out = val;
+    return true;
+}
+
 void OnSignal(int /*sig*/) noexcept {
     g_running.store(false, std::memory_order_release);
 }
 
 void InstallSignals() noexcept {
+#if !defined(_WIN32)
     struct sigaction sa {};
     sa.sa_handler = OnSignal;
     sigemptyset(&sa.sa_mask);
@@ -49,9 +80,14 @@ void InstallSignals() noexcept {
     sigaction(SIGINT, &sa, nullptr);
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGUSR1, &sa, nullptr); // Yield DAC cleanly when an emulator launches
+#else
+    std::signal(SIGINT, OnSignal);
+    std::signal(SIGTERM, OnSignal);
+#endif
 }
 
 void PinThread(int core_id, int fifo_prio) noexcept {
+#if !defined(_WIN32)
     if (core_id >= 0) {
         cpu_set_t set;
         CPU_ZERO(&set);
@@ -63,6 +99,10 @@ void PinThread(int core_id, int fifo_prio) noexcept {
         sp.sched_priority = fifo_prio;
         pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
     }
+#else
+    (void)core_id;
+    (void)fifo_prio;
+#endif
 }
 
 struct StreamMeta {
@@ -121,6 +161,7 @@ private:
     alignas(64) std::atomic<std::size_t> read_pos_{0U};
 };
 
+#if !defined(_WIN32)
 inline std::int32_t PcmSampleToS32(FLAC__int32 sample, unsigned int bps) noexcept {
     if (bps >= 32U) {
         return static_cast<std::int32_t>(sample);
@@ -370,6 +411,7 @@ bool ConfigurePlayerAlsa(snd_pcm_t* pcm,
     out_period = period;
     return flac_ax::ess::OnEssHardwareConfigured(chip, pcm, out_rate, out_period);
 }
+#endif
 
 void PrintUsage() {
     std::cerr << "Usage: flac_ax [options] <track1.flac|.dsf|.dff> [track2...]\n"
@@ -387,8 +429,8 @@ int main(int argc, char** argv) {
     double target_volume = 1.0;
     std::string device_override;
     std::string mixer_card = "FC3";
-    unsigned int initial_rate = 48000U;
-    snd_pcm_uframes_t period_frames = 256U;
+    std::uint32_t initial_rate = 48000U;
+    std::uint32_t period_frames = 256U;
     std::vector<std::string> tracks;
 
     for (int i = 1; i < argc; ++i) {
@@ -398,12 +440,21 @@ int main(int argc, char** argv) {
         } else if (arg == "--mixer-card" && i + 1 < argc) {
             mixer_card = argv[++i];
         } else if (arg == "--volume" && i + 1 < argc) {
-            target_volume = std::stod(argv[++i]);
+            if (!ParseDouble(argv[++i], target_volume)) {
+                PrintUsage();
+                return 1;
+            }
             has_volume = true;
         } else if (arg == "--rate" && i + 1 < argc) {
-            initial_rate = static_cast<unsigned int>(std::stoul(argv[++i]));
+            if (!ParseUint32(argv[++i], initial_rate) || initial_rate == 0U) {
+                PrintUsage();
+                return 1;
+            }
         } else if (arg == "--period" && i + 1 < argc) {
-            period_frames = static_cast<snd_pcm_uframes_t>(std::stoul(argv[++i]));
+            if (!ParseUint32(argv[++i], period_frames) || period_frames == 0U) {
+                PrintUsage();
+                return 1;
+            }
         } else if (!arg.empty() && arg.front() == '-') {
             PrintUsage();
             return 1;
@@ -418,6 +469,21 @@ int main(int argc, char** argv) {
     }
 
     InstallSignals();
+
+    const auto chip = flac_ax::ess::MakeEssProfile(flac_ax::ess::EssChipFamily::Es9281AcPro);
+    const std::string alsa_dev = !device_override.empty() ? device_override : chip.default_alsa_device;
+
+#if defined(_WIN32)
+    (void)has_volume;
+    (void)target_volume;
+    (void)mixer_card;
+    (void)alsa_dev;
+    (void)initial_rate;
+    (void)period_frames;
+    std::cout << "[FLAC_AX] Windows build mode: ALSA/FLAC++ hardware playback skipped "
+              << "(chip=" << chip.name << ", tracks=" << tracks.size() << ")\n";
+    return 0;
+#else
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
         std::cerr << "[FLAC_AX] WARN: mlockall skipped (check CAP_IPC_LOCK / RLIMIT_MEMLOCK)\n";
     }
@@ -432,9 +498,6 @@ int main(int argc, char** argv) {
         ::close(lock_fd);
         return 1;
     }
-
-    const auto chip = flac_ax::ess::MakeEssProfile(flac_ax::ess::EssChipFamily::Es9281AcPro);
-    const std::string alsa_dev = !device_override.empty() ? device_override : chip.default_alsa_device;
 
     flac_ax::ess::EssHardwareMixer hw_mixer;
     if (has_volume) {
@@ -467,8 +530,10 @@ int main(int argc, char** argv) {
     }
 
     unsigned int actual_rate = initial_rate;
-    snd_pcm_uframes_t actual_period = period_frames;
-    if (!ConfigurePlayerAlsa(pcm, chip, initial_rate, period_frames, false, actual_rate, actual_period)) {
+    auto actual_period = static_cast<snd_pcm_uframes_t>(period_frames);
+    if (!ConfigurePlayerAlsa(pcm, chip, initial_rate,
+                             static_cast<snd_pcm_uframes_t>(period_frames),
+                             false, actual_rate, actual_period)) {
         std::cerr << "[FLAC_AX] Failed to configure ALSA hardware parameters\n";
         snd_pcm_close(pcm);
 #if defined(FLAC_AX_MAIN_HAVE_TELEMETRY)
@@ -487,26 +552,28 @@ int main(int argc, char** argv) {
     decoder.Start();
 
     PinThread(0, 80);
-    std::vector<std::int32_t> out_buf(actual_period * 2U, 0);
+    std::vector<std::int32_t> out_buf(static_cast<std::size_t>(actual_period) * 2U, 0);
 
     while (g_running.load(std::memory_order_acquire)) {
         if (meta.format_changed.exchange(false, std::memory_order_acq_rel)) {
             const unsigned int next_rate = meta.sample_rate.load(std::memory_order_acquire);
             const bool is_dop = meta.is_dop.load(std::memory_order_acquire);
+            ring.Clear();
             snd_pcm_drop(pcm);
-            if (!ConfigurePlayerAlsa(pcm, chip, next_rate, period_frames, is_dop,
-                                     actual_rate, actual_period)) {
+            if (!ConfigurePlayerAlsa(pcm, chip, next_rate,
+                                     static_cast<snd_pcm_uframes_t>(period_frames),
+                                     is_dop, actual_rate, actual_period)) {
                 g_running.store(false, std::memory_order_release);
                 break;
             }
-            if (out_buf.size() < actual_period * 2U) {
-                out_buf.resize(actual_period * 2U, 0);
+            if (out_buf.size() < static_cast<std::size_t>(actual_period) * 2U) {
+                out_buf.resize(static_cast<std::size_t>(actual_period) * 2U, 0);
             }
-            std::cout << "[FLAC_AX] Reconfigured " << chip.chip_name << " -> "
+            std::cout << "[FLAC_AX] Reconfigured " << chip.name << " -> "
                       << actual_rate << " Hz (" << (is_dop ? "DoP" : "PCM") << ")\n";
         }
 
-        const std::size_t got = ring.ReadFrames(out_buf.data(), actual_period);
+        const std::size_t got = ring.ReadFrames(out_buf.data(), static_cast<std::size_t>(actual_period));
         if (got == 0U) {
             snd_pcm_wait(pcm, 2);
             continue;
@@ -546,4 +613,12 @@ int main(int argc, char** argv) {
     ax::ShutdownTelemetryShm();
 #endif
     return 0;
+#endif
 }
+```[cite: 29]
+
+### Verification on Windows
+* **CMake configure & build:** Gate `PkgConfig::FLAC`, `PkgConfig::ALSA`, and `pthread` on `flac_ax` in `CMakeLists.txt` for non-Windows (`if(UNIX AND NOT APPLE)`), then run a CMake + Ninja build on Windows (`cmake --build ... --target flac_ax ax_video_upscaler`)[cite: 28, 29].
+* **Expected result:** Zero errors on `EssChipProfile` fields (`chip.name`), `ring.Clear()` compiles cleanly, and both `flac_ax` and `ax_video_upscaler` build on Windows while keeping the 150 GB partition / USB installer work parked until you're ready.
+
+How did the Windows build go, and is there anything else in `FLAC_AX` or `Piccolo-AX` you want to check before wrapping up?
