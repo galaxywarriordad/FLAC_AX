@@ -11,9 +11,11 @@ option(FLAC_AX_BUILD_VIDEO_UPSCALER "Build single-stream 720p/1080p/2K DVD & V4L
 option(FLAC_AX_NATIVE_ARCH "Optimize for host CPU (-march=native) on bare-metal target" OFF)
 option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (IPO/LTO) in Release builds" ON)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(FLAC REQUIRED IMPORTED_TARGET flac++)
-pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+if(UNIX AND NOT APPLE)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(FLAC REQUIRED IMPORTED_TARGET flac++)
+    pkg_check_modules(ALSA REQUIRED IMPORTED_TARGET alsa)
+endif()
 
 if(FLAC_AX_USE_AX_SDK)
     if(NOT TARGET ax::core)
@@ -68,11 +70,13 @@ target_compile_options(flac_ax PRIVATE
     -Wall -Wextra -Wpedantic
 )
 
-target_link_libraries(flac_ax PRIVATE
-    PkgConfig::FLAC
-    PkgConfig::ALSA
-    pthread
-)
+if(UNIX AND NOT APPLE)
+    target_link_libraries(flac_ax PRIVATE
+        PkgConfig::FLAC
+        PkgConfig::ALSA
+        pthread
+    )
+endif()
 
 if(FLAC_AX_USE_AX_SDK)
     target_link_libraries(flac_ax PRIVATE ax::core)
