@@ -10,11 +10,13 @@ Enter four contenders priced between **£29.18 and £49.79**. Tested both as sta
 
 ## 🔬 1\. Silicon Architecture & Circuit Topology
 
-### 🎛️ HiBy FC3 (`£29.67` \| `VID 0x32BB`)
+### 🎛️ HiBy FC3 (`£29.67` \| `VID 0x32BB` — `2.0 Vrms` & `1.3 Vrms` Revisions)
 
 * **Topology:** ESS Sabre `ES9281AC Pro` Single-Die SoC (Integrated USB 2.0 PHY \+ 32-bit HyperStream II QUAD DAC \+ Analogue Output Stage)
 
-Unlike conventional multi-chip dongles that rely on a separate USB receiver to feed an external DAC over an I²S bus, the HiBy FC3 consolidates the entire digital-to-analogue signal chain onto a single piece of ESS Technology silicon. Eliminating the external USB-to-I²S bridge removes an entire clock domain and its associated inter-chip jitter path. The integrated analogue stage swings a textbook `2.0 Vrms` (`112 mW @ 32 Ω`) single-ended with an output impedance under `1.0 Ω`, a `+130 dB` signal-to-noise ratio, and native hardware rendering for `32-bit/384 kHz` PCM, DoP DSD128, and MQA. Physical hardware volume buttons and a detachable USB-C umbilical complete a remarkably disciplined design.
+Unlike conventional multi-chip dongles that rely on a separate USB receiver to feed an external DAC over an I²S bus, the HiBy FC3 consolidates the entire digital-to-analogue signal chain onto a single piece of ESS Technology silicon. Eliminating the external USB-to-I²S bridge removes an entire clock domain and its associated inter-chip jitter path. The integrated analogue stage swings a textbook `2.0 Vrms` (`112 mW @ 32 Ω`) single-ended on the standard/OLED revision—or `1.3 Vrms` (`70 mW @ 32 Ω`) on the earlier hardware revision—with an output impedance under `1.0 Ω`, a `+130 dB` signal-to-noise ratio, and native hardware rendering for `32-bit/384 kHz` PCM, DoP DSD128, and MQA. Physical hardware volume buttons and a detachable USB-C umbilical complete a remarkably disciplined design.
+
+* **Hardware Revision Gain-Staging (`2.0 Vrms` vs. `1.3 Vrms`):** Both revisions share `VID 0x32BB` (`hw:CARD=FC3,DEV=0`). Use **`--volume 0.80`** (`fc3_2v0`) for the `2.0 Vrms` revision, or **`--volume 0.95`** (`fc3_1v3` / `AX_DAC_VOL=0.95` in `/userdata/system/ax-dac.conf`) for the earlier `1.3 Vrms` revision when driving Class-D speaker amplifiers.
 
 ### ⚡ FiiO KA11 (`£29.19`)
 
@@ -42,9 +44,10 @@ Commanding a £20 premium over the pack, the Moondrop Dawn Pro 2 steps up from t
 | :---- | :---- | :---- | :---- | :---- | :---- |
 | **UK Street Price** | \~£9.00 | £29.67 (£35 OLED) | £29.19 | **£29.18** | £49.79 (Pre-Order) |
 | **DAC / Amp Silicon** | `CS46L06` Single-Die | `ES9281AC Pro` Single-Die | `CS43131` \+ `SGM8262` | Dual `CS43131` \+ `CB5100` | Dual `CS43198` \+ Ext. Amp |
-| **Max Output (3.5mm SE)** | 0.5 Vrms (EU Cap) | 2.0 Vrms (112 mW) | **2.5 Vrms (200 mW)** | 2.0 Vrms (125 mW) | 2.0 Vrms (\~60 mW) |
+| **Max Output (3.5mm SE)** | 0.5 Vrms (EU Cap) | **2.0 Vrms (112 mW)** / Early: **1.3 Vrms (70 mW)** | **2.5 Vrms (200 mW)** | 2.0 Vrms (125 mW) | 2.0 Vrms (\~60 mW) |
 | **Max Output (4.4mm Bal)** | None | None | None | **4.0 Vrms (320 mW)** | 4.0 Vrms (\~120 mW) |
-| **Power Gain vs. UK Apple** | 1× (Baseline) | 14× (3.5mm) | 25× (3.5mm) | 15.6× (SE) / **40× (Bal)** | 7.5× (SE) / 15× (Bal) |
+| **Power Gain vs. UK Apple** | 1× (Baseline) | 14× (`2.0V`) / 8.75× (`1.3V`) | 25× (3.5mm) | 15.6× (SE) / **40× (Bal)** | 7.5× (SE) / 15× (Bal) |
+| **Class-D Amp `--volume`** | `1.00` (`0.5 Vrms`) | **`0.80` (`2.0V`)** / **`0.95` (`1.3V`)** | **`0.72`** (`2.5 Vrms`) | **`0.80`** (`2.0 Vrms`) | **`0.80`** (`2.0 Vrms`) |
 | **PCM / DSD Ceiling** | 24-bit / 48 kHz (No DSD) | 32-bit / 384 kHz, DSD128 | 32-bit / 384 kHz, DSD256 | 32-bit / 384 kHz, DSD256 | 32-bit / 384 kHz, DSD256 |
 | **On-Board Hardware EQ** | None | None | None (Filters only) | **Yes (8/10-band PEQ)** | Yes (8-band PEQ) |
 | **In-Line Microphone ADC** | Yes | No | No | **Yes** | No |
@@ -56,7 +59,7 @@ Commanding a £20 premium over the pack, the Moondrop Dawn Pro 2 steps up from t
 
 Deploying a USB DAC inside a real-time Linux (`6.12-rt`) bare-metal environment strips away the safety net of PipeWire and PulseAudio. When `FLAC_AX` locks decoded 32-bit PCM or DoP DSD streams into physical RAM (`mlockall`) and streams frames from an isolated `SCHED_FIFO` Priority 80 CPU core at `96 samples` (`2.00 ms @ 48 kHz`), USB isochronous timing discipline and analogue gain staging become paramount.
 
-* **🎛️ HiBy FC3 — Seamless Native Synergy:** Built specifically around `VID 0x32BB`, the FC3 operates as a zero-friction native target (`hw:CARD=FC3,DEV=0`). Its single-die USB PHY exhibits exemplary interrupt predictability at `2.00 ms` buffer intervals without requiring legacy `nrpacks` kernel module hacks, while its `2.0 Vrms` output aligns cleanly with the input sensitivity of `TI TPA3116` and `TPA3255` Class-D amplifiers at `--volume 0.80`.  
+* **🎛️ HiBy FC3 — Seamless Native Synergy (`2.0 Vrms` & `1.3 Vrms`):** Built specifically around `VID 0x32BB`, the FC3 operates as a zero-friction native target (`hw:CARD=FC3,DEV=0`). Its single-die USB PHY exhibits exemplary interrupt predictability at `2.00 ms` buffer intervals without requiring legacy `nrpacks` kernel module hacks, while its `2.0 Vrms` output aligns cleanly with `TI TPA3116` / `TPA3255` Class-D amplifiers at `--volume 0.80` (or **`--volume 0.95`** / `AX_DAC_VOL=0.95` in `/userdata/system/ax-dac.conf` for the earlier **`1.3 Vrms` / `70 mW`** hardware revision).    
 * **🦪 TRN Black Pearl — Solving the Bare-Metal Room-EQ Paradox:** Because bare-metal `FLAC_AX` bypasses all host-side software DSP to preserve bit-exact `S32_LE` delivery, desktop speaker builders normally rely strictly on physical placement to tame desk bounce (`220–320 Hz`) and rear-wall boundary boom (`100–140 Hz`). By storing subtractive parametric EQ directly inside the TRN Black Pearl’s on-board flash via a web browser, users retain bit-perfect host transport while applying acoustic room correction inside the DAC itself. It requires only a simple `udev` Vendor ID update and runs stably at `2.00 ms` over standard UAC 2.0 on `x86_64` hardware.  
 * **⚡ FiiO KA11 — Gain-Staging Discipline Required:** Fully compliant with Linux UAC 2.0 (`S32_LE` and DoP), the KA11 demands careful gain discipline when feeding a Class-D amplifier. Because its `SGM8262` output stage swings `2.5 Vrms` (`+2 dB` hotter than standard consumer line level), `flac_ax --volume` should be capped around `0.70–0.75` to prevent overdriving the analogue input stage of budget `TPA3116` boards.  
 * **💎 Moondrop Dawn Pro 2 — Diminishing Returns on Speaker Duty:** While its 100-step hardware volume buttons and on-board PEQ behave impeccably under `6.12-rt` ALSA, feeding a high-impedance (`10 kΩ – 47 kΩ`) Class-D amplifier line input bypasses the current-delivery demands where discrete op-amps earn their keep—rendering its £20 surcharge largely inaudible through passive loudspeakers.
@@ -92,7 +95,7 @@ For dual-boot gamers who split time between `2.00 ms` bare-metal retro emulation
 | Award Category | Winner | Price | Verdict Summary |
 | :---- | :---- | :---- | :---- |
 | 🏆 **Group Test Winner & Best Value** | **TRN Black Pearl** | **£29.18** | Unbeatable engineering per pound. Dual `CS43131` architecture, 320 mW balanced output, 2.0 Vrms Class-D line-out, hardware PEQ, and headset mic support make it the ultimate all-rounder for hi-fi, cinema, and gaming. |
-| 🥈 **Best Native \[AX\] Plug-and-Play** | **HiBy FC3** | **£29.67** | Effortless `VID 0x32BB` integration, single-die ESS Sabre precision, MQA rendering, and physical volume controls. The cleanest zero-config choice for dedicated Piccolo \[AX\] speaker rigs. |
+| 🥈 **Best Native \[AX\] Plug-and-Play** | **HiBy FC3** | **£29.67** | Effortless `VID 0x32BB` integration, single-die ESS Sabre precision, MQA rendering, and physical volume controls (`2.0 Vrms` `--volume 0.80` or early `1.3 Vrms` `--volume 0.95`). The cleanest zero-config choice for dedicated Piccolo \[AX\] speaker rigs. |
 | ⚡ **Best 3.5mm Headphone Power** | **FiiO KA11** | **£29.19** | A pocket rocket. Its `CS43131` \+ `SGM8262` stage delivers 200 mW through a standard 3.5mm jack—ideal if you refuse to buy 4.4mm balanced cables. |
 | 💎 **Best for Sensitive IEMs** | **Moondrop Dawn Pro 2** | **£49.79** | Flagship dual `CS43198` purity and 100-step volume granularity shine on high-end IEMs, though its £20 premium yields diminishing returns on speaker duty. |
 
