@@ -8,8 +8,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_36_1)" ON)
 option(FLAC_AX_BUILD_AV_STUDIO "Build ax_av_studio (MPK Mini MK3 + AVX2 Synth + A/V HUD)" ON)
 option(FLAC_AX_BUILD_VIDEO_UPSCALER "Build single-stream 720p/1080p/2K DVD & V4L2 retro upscaler (ax_video_upscaler)" ON)
-option(FLAC_AX_NATIVE_ARCH "Optimize for host CPU (-march=native) on bare-metal target" OFF)
-option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (IPO/LTO) in Release builds" ON)
+option(FLAC_AX_SKYLAKE_ARCH "Target Skylake microarchitecture (-march=skylake / /arch:AVX2)" ON)
+option(FLAC_AX_ENABLE_LTO "Enable Link-Time Optimization (LLVM LTO / IPO) in Release builds" ON)
 
 if(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
@@ -58,29 +58,57 @@ set(FLAC_AX_VIDEO_HEADERS
     src/video/av_pts_sync.hpp
 )
 
+function(flac_ax_apply_target_flags target_name)
+    target_include_directories(${target_name} PRIVATE src)
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND MSVC)
+        # Preferred Windows LLVM frontend (clang-cl)
+        target_compile_options(${target_name} PRIVATE
+            $<$<CONFIG:Release>:/O2 -DNDEBUG>
+            $<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_SKYLAKE_ARCH}>>:/clang:-march=skylake>
+            -Wall -Wextra -Wpedantic
+        )
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        # Preferred Unix/Clang toolchain (clang++)
+        target_compile_options(${target_name} PRIVATE
+            $<$<CONFIG:Release>:-O3 -DNDEBUG -fomit-frame-pointer>
+            $<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_SKYLAKE_ARCH}>>:-march=skylake>
+            -Wall -Wextra -Wpedantic
+        )
+    elseif(MSVC)
+        # Fallback MSVC (cl.exe)
+        target_compile_options(${target_name} PRIVATE
+            $<$<CONFIG:Release>:/O2 /DNDEBUG>
+            $<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_SKYLAKE_ARCH}>>:/arch:AVX2>
+            /W3
+        )
+    else()
+        # Fallback GNU (g++)
+        target_compile_options(${target_name} PRIVATE
+            $<$<CONFIG:Release>:-O3 -DNDEBUG -fomit-frame-pointer>
+            $<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_SKYLAKE_ARCH}>>:-march=skylake>
+            -Wall -Wextra -Wpedantic
+        )
+    endif()
+
+    if(UNIX AND NOT APPLE)
+        target_link_libraries(${target_name} PRIVATE pthread)
+    endif()
+
+    if(FLAC_AX_USE_AX_SDK)
+        target_link_libraries(${target_name} PRIVATE ax::core)
+        target_compile_definitions(${target_name} PRIVATE FLAC_AX_HAS_AX_SDK=1)
+    endif()
+endfunction()
+
 # --- 1. Headless Bit-Perfect ESS Sabre FLAC Player ---
 add_executable(flac_ax
     src/main.cpp
     ${FLAC_AX_DSD_HEADERS}
 )
-target_include_directories(flac_ax PRIVATE src)
-
-target_compile_options(flac_ax PRIVATE
-    $<$<CONFIG:Release>:-O3 -DNDEBUG -fomit-frame-pointer>$<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_NATIVE_ARCH}>>:-march=native>
-    -Wall -Wextra -Wpedantic
-)
-
+flac_ax_apply_target_flags(flac_ax)
 if(UNIX AND NOT APPLE)
-    target_link_libraries(flac_ax PRIVATE
-        PkgConfig::FLAC
-        PkgConfig::ALSA
-        pthread
-    )
-endif()
-
-if(FLAC_AX_USE_AX_SDK)
-    target_link_libraries(flac_ax PRIVATE ax::core)
-    target_compile_definitions(flac_ax PRIVATE FLAC_AX_HAS_AX_SDK=1)
+    target_link_libraries(flac_ax PRIVATE PkgConfig::FLAC PkgConfig::ALSA)
 endif()
 
 # --- 2. Unified [AX] Audio/Visual Synth, Mixer & Spectrum Studio ---
@@ -97,27 +125,14 @@ if(FLAC_AX_BUILD_AV_STUDIO)
         src/visual/av_hud.cpp
         ${FLAC_AX_DSP_STUDIO_HEADERS}
     )
-
-    target_include_directories(ax_av_studio PRIVATE src)
-
-    target_compile_options(ax_av_studio PRIVATE
-        $<$<CONFIG:Release>:-O3 -DNDEBUG -fomit-frame-pointer>$<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_NATIVE_ARCH}>>:-march=native>
-        -Wall -Wextra -Wpedantic
-    )
-
+    flac_ax_apply_target_flags(ax_av_studio)
     if(UNIX AND NOT APPLE)
         target_link_libraries(ax_av_studio PRIVATE
             PkgConfig::ALSA
             PkgConfig::FLAC
             PkgConfig::SDL2
             OpenGL::GL
-            pthread
         )
-    endif()
-
-    if(FLAC_AX_USE_AX_SDK)
-        target_link_libraries(ax_av_studio PRIVATE ax::core)
-        target_compile_definitions(ax_av_studio PRIVATE FLAC_AX_HAS_AX_SDK=1)
     endif()
 endif()
 
@@ -127,24 +142,9 @@ if(FLAC_AX_BUILD_VIDEO_UPSCALER)
         src/video_upscaler_main.cpp
         ${FLAC_AX_VIDEO_HEADERS}
     )
-
-    target_include_directories(ax_video_upscaler PRIVATE src)
-
-    target_compile_options(ax_video_upscaler PRIVATE
-        $<$<CONFIG:Release>:-O3 -DNDEBUG -fomit-frame-pointer>$<$<AND:$<CONFIG:Release>,$<BOOL:${FLAC_AX_NATIVE_ARCH}>>:-march=native>
-        -Wall -Wextra -Wpedantic
-    )
-
+    flac_ax_apply_target_flags(ax_video_upscaler)
     if(UNIX AND NOT APPLE)
-        target_link_libraries(ax_video_upscaler PRIVATE
-            PkgConfig::ALSA
-            pthread
-        )
-    endif()
-
-    if(FLAC_AX_USE_AX_SDK)
-        target_link_libraries(ax_video_upscaler PRIVATE ax::core)
-        target_compile_definitions(ax_video_upscaler PRIVATE FLAC_AX_HAS_AX_SDK=1)
+        target_link_libraries(ax_video_upscaler PRIVATE PkgConfig::ALSA)
     endif()
 endif()
 
@@ -161,4 +161,3 @@ if(FLAC_AX_ENABLE_LTO)
         endif()
     endif()
 endif()
-```[cite: 29]
