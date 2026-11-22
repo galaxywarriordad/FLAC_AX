@@ -738,9 +738,6 @@ int main(int argc, char** argv) {
         std::size_t offset = 0U;
         while (offset < actual_period && g_running.load(std::memory_order_acquire)) {
             const snd_pcm_sframes_t written =
-        std::size_t offset = 0U;
-        while (offset < actual_period && g_running.load(std::memory_order_acquire)) {
-            const snd_pcm_sframes_t written =
                 snd_pcm_writei(pcm, period_buf.data() + offset * 2U, actual_period - offset);
             if (written >= 0) {
                 offset += static_cast<std::size_t>(written);
