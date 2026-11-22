@@ -1,8 +1,8 @@
-# `FLAC_AX` Technical Architecture & Ecosystem Specification
+# 🏛️ `FLAC_AX` Technical Architecture & Ecosystem Specification
 
 **Project:** `FLAC_AX` — Deterministic Bit-Perfect Linux Audio Appliance & `[AX]` Audio/Visual Studio  
 **Ecosystem:** The Silicon Preservation Society (`Piccolo [AX]` / `ax-sdk` `v1_36_1` / `Generation-X-AX`)  
-**Target Baseline:** Intel Core i5-9600K (6C/6T, HT Disabled), 32 GB DDR4-3600, NVIDIA GTX 980 Ti (6 GB GM200), HiBy FC3 (`ESS Sabre ES9281AC Pro` / `ES9281PRO`) USB DAC, Akai MPK Mini MK3 (`MPK mini 3`) USB-MIDI Controller
+**Target Baseline:** Intel Core `i5-9600K` (6C/6T, HT Disabled), `32 GB` DDR4-3600, NVIDIA GTX 980 Ti (`6 GB` GM200), **HiBy FC3** (`ESS Sabre ES9281AC Pro` / `ES9281PRO`) USB DAC + **Nobsound Q10** / **Wharfedale Diamond 9.0** & **Grado SR325x**, **Akai MPK Mini MK3** (`MPK mini 3`) USB-MIDI Controller
 
 ---
 
@@ -18,14 +18,13 @@ On the reference 6-core `i5-9600K` topology (`coffee_lake_9600k` in `ax-sdk`), `
 | :--- | :--- | :--- | :--- | :--- |
 | **`0x01`** | **Core 0** | `Audio / IRQ` | Pinned `SCHED_FIFO` (`80`) ALSA `snd_pcm_writei` writer + USB xHCI IRQ for the HiBy FC3 DAC (`S32_LE`, `44.1–384 kHz`). | Pinned `SCHED_FIFO` (`80`) ALSA `snd_pcm_writei` writer + USB xHCI IRQ (`S32_LE`, `48 kHz`, `96`-frame / `2.00 ms` period). |
 | **`0x02`** | **Core 1** | `Vulkan / Video` | Idle (available for emulator submission). | Pinned VBlank-locked (`SDL_GL_SetSwapInterval(1)`) OpenGL Studio HUD on GTX 980 Ti (`60/120 Hz`, `< 64 MB` VRAM). |
-| **`0x1C`** | **Cores 2–4** | `Emulation / DSP` | Reserved exclusively for foreground emulators (`Eden`, `Cemu`, `Generation-X-AX`). | 16-voice polyphonic saw+sub synthesizer, 2-pole SVF low-pass filter, tactile 8-knob mixer & `1024`-pt Hann FFT tap. |
+| **`0x1C`** | **Cores 2–4** | `Emulation / DSP` | Reserved exclusively for foreground emulators (`Eden`, `Cemu`, `Generation-X-AX`). | 16-voice polyphonic saw+sub synthesizer, 8-voice drum synth, 2-pole SVF low-pass filter, `StereoReverbDsp`, `TapeDelayDsp` & `1024`-pt Hann FFT tap. |
 | **`0x20`** | **Core 5** | `Housekeeping / I/O` | Pinned `SCHED_OTHER` `PersistentDecoderWorker` + `RamFilePreloader` (`FLAC::Decoder::Stream` from RAM). | Pinned `SCHED_OTHER` `MpkMini3Listener` (`snd_rawmidi_open` non-blocking reader for Akai MPK Mini MK3). |
 
 ### End-to-End Signal & Clock-Domain Diagram
 
 ```text
 +---------------------------------------------------------------------------------------------------+
-
 |                        CONTROL & STORAGE DOMAIN — CORE 5 (0x20 / SCHED_OTHER)                     |
 |                                                                                                   |
 |  [Akai MPK Mini MK3] --(USB 1.1 FS / 1ms poll)--> [MpkMini3Listener (ALSA RawMIDI)]               |
@@ -37,7 +36,6 @@ On the reference 6-core `i5-9600K` topology (`coffee_lake_9600k` in `ax-sdk`), `
                                                             |
                                                             v
 +---------------------------------------------------------------------------------------------------+
-
 |                        DSP & MIXING DOMAIN — CORES 2–4 (0x1C / nohz_full / AVX2+FMA)              |
 |                                                                                                   |
 |  [PolySynthEngine: 16 Voices + SVF Filter + Saturation] + [1024-pt Hann Radix-2 FFT Tap]          |
@@ -45,11 +43,9 @@ On the reference 6-core `i5-9600K` topology (`coffee_lake_9600k` in `ax-sdk`), `
 |          | Lock-Free StereoFrameRing<65536>                             | Double-Buffered         |
 |          | (64-byte Cache-Line Aligned, S32_LE)                         | VisualSnapshot          |
 +----------|--------------------------------------------------------------|-------------------------+
-
            |                                                              |
            v                                                              v
 +----------------------------------------------------+  +-------------------------------------------+
-
 |   AUDIO CLOCK DOMAIN — CORE 0 (0x01 / FIFO 80)     |  |  VIDEO CLOCK DOMAIN — CORE 1 (0x02)       |
 |                                                    |  |                                           |
 |  [ALSA Direct hw:CARD=FC3,DEV=0]                   |  |  [GTX 980 Ti (GM200) OpenGL Studio HUD]   |
@@ -72,6 +68,7 @@ On the reference 6-core `i5-9600K` topology (`coffee_lake_9600k` in `ax-sdk`), `
 ### Memory & Storage Topology (`toram` / `tmpfs` / `mlockall`)
 
 Because `Piccolo [AX]` runs from a read-only `EROFS` image loaded into RAM (`toram`) to preserve USB/NVMe flash media and prevent mid-playback I/O stalls:
+
 * **Process Page Locking (`mlockall(MCL_CURRENT | MCL_FUTURE)`):** Executed at startup in both `flac_ax` and `ax_av_studio` so real-time audio ring buffers, synth voice tables, and ALSA PCM period buffers never incur minor/major page faults on Core `0`.
 * **Adaptive RAM Preload Tiers (`DetectHostPreloadPolicy()` in `src/preload_policy.hpp`):**
   * **`WholeAlbum` (`>= 16 GiB` RAM, default on 32 GB rig):** Loads the entire album queue into `RamFilePreloader` up to an `8 GiB` safety ceiling.
@@ -82,6 +79,7 @@ Because `Piccolo [AX]` runs from a read-only `EROFS` image loaded into RAM (`tor
 ### Physical USB Host Controller Port Separation
 
 To prevent USB 1.1 Full-Speed (`12 Mbps`) `1 kHz` SOF polling frames from the **Akai MPK Mini MK3** from contending with USB 2.0 High-Speed (`480 Mbps`) asynchronous isochronous audio transfers to the **HiBy FC3** on a shared xHCI Transaction Translator (TT):
+
 * **Dedicated Audio Bus (`Core 0` IRQ):** Connect the **HiBy FC3** to a rear-panel Intel Z390 PCH USB 3.1 Gen2/Gen1 port on its own xHCI root port/IRQ, with USB runtime autosuspend disabled (`power/control=on` for HiBy `VID 0x32BB`).
 * **Isolated Control Bus (`Core 5` Poll):** Connect the **Akai MPK Mini MK3** to a separate front-panel or secondary controller port so `1 ms` MIDI polling stays completely isolated from the audio clock domain.
 
@@ -117,7 +115,6 @@ To prevent USB 1.1 Full-Speed (`12 Mbps`) `1 kHz` SOF polling frames from the **
 
 ```text
                        +-----------------------------------+
-
                        |              ax-sdk               |
                        |   (Shared C++20 Core Library)     |
                        | - hardware_profiles.json (v2.1)   |
@@ -127,24 +124,20 @@ To prevent USB 1.1 Full-Speed (`12 Mbps`) `1 kHz` SOF polling frames from the **
                        +-----------------+-----------------+
                                          |
         +--------------------------------+--------------------------------+
-
         |                                |                                |
         v                                v                                v
 +-------------------+         +---------------------+          +---------------------+
-
 |      FLAC_AX      |         |   Generation-X-AX   |          | Eden-Espresso-Wave  |
 |  (A/V Studio &    |         | (7 Classic Engines) |          |  & Cemu-Latte-AX    |
-|  ESS Audio Engine)|         | RMG, BlastEm, OutRun|          | (Switch & Wii U)    |
+| ESS Audio Engine) |         | RMG, BlastEm, OutRun|          | (Switch & Wii U)    |
 | - flac_ax (CLI)   |         | EDuke32, Frontier,  |          | - Vulkan 1.4 / PGO  |
 | - ax_av_studio    |         | Flycast & Hatari    |          | - Maxwell VRAM Guard|
 +---------+---------+         +----------+----------+          +----------+----------+
-
           |                              |                                |
           +------------------------------+--------------------------------+
                                          |
                                          v
                        +-----------------------------------+
-
                        |           Piccolo [AX]            |
                        |   (< 512 MB Bare-Metal Linux)     |
                        | - Linux 6.12-rt + EROFS toram     |
@@ -170,5 +163,6 @@ To prevent USB 1.1 Full-Speed (`12 Mbps`) `1 kHz` SOF polling frames from the **
 | **Sprint 3 — `[AX]` Audio/Visual Studio Layer** | MPK Mini MK3 + Poly Synth + GTX 980 Ti HUD (`ax_av_studio`) | Built Core `5` `MpkMini3Listener` (ALSA RawMIDI auto-detect + `K1–K8` `CC 70–77` + 8 pads + pitch/mod), Cores `2–4` `PolySynthEngine` (16-voice saw+sub + 2-pole SVF + `1024`-pt Hann FFT), Core `1` `AvStudioHud` (VBlank OpenGL spectrum/oscilloscope/MPK3 HUD), and `/run/lock/ax-dac.lock` DAC arbitration. |
 
 ### Next Technical Milestones
-1. **Bare-Metal `Piccolo [AX]` Buildroot Package (`batocera-ax-external/package/flac-ax/`):** Build and install both `/usr/bin/flac_ax` and `/usr/bin/ax_av_studio` inside `Piccolo-AX` with udev USB autosuspend rules for `VID 0x32BB`.
+
+1. **Bare-Metal `Piccolo [AX]` Buildroot Package (`batocera-ax-external/package/flac-ax/`):** Build and install `/usr/bin/flac_ax`, `/usr/bin/ax_av_studio`, and `/usr/bin/ax_video_upscaler` inside `Piccolo-AX` with udev USB autosuspend rules for `VID 0x32BB`.
 2. **Native DoP (`DSD64` / `DSD128`) & Hardware UAC 2.0 Volume Control:** Add `.dsf` / `.dff` 24-bit DoP (`0x05` / `0xFA`) packing into `StereoFrameRing<65536>` (`176.4 kHz` / `352.8 kHz`) and bind `snd_mixer_*` to the ES9281AC Pro's internal 32-bit HyperStream digital attenuator for zero-attenuation bit-exact volume control.
