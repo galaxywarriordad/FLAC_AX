@@ -615,10 +615,4 @@ int main(int argc, char** argv) {
     return 0;
 #endif
 }
-```[cite: 29]
 
-### Verification on Windows
-* **CMake configure & build:** Gate `PkgConfig::FLAC`, `PkgConfig::ALSA`, and `pthread` on `flac_ax` in `CMakeLists.txt` for non-Windows (`if(UNIX AND NOT APPLE)`), then run a CMake + Ninja build on Windows (`cmake --build ... --target flac_ax ax_video_upscaler`)[cite: 28, 29].
-* **Expected result:** Zero errors on `EssChipProfile` fields (`chip.name`), `ring.Clear()` compiles cleanly, and both `flac_ax` and `ax_video_upscaler` build on Windows while keeping the 150 GB partition / USB installer work parked until you're ready.
-
-How did the Windows build go, and is there anything else in `FLAC_AX` or `Piccolo-AX` you want to check before wrapping up?
