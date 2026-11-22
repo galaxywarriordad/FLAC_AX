@@ -2,14 +2,18 @@
 
 **How an open-source, bare-metal Linux audio engine delivers boutique streamer purity and instant analog-modeled synthesis—without the £1,500 price tag.**
 
+---
+
 ## 🧰 What You Need to Get Started
 
 Unlike boutique streamers or rack-mounted studio gear that lock you into expensive proprietary ecosystems, `FLAC_AX` and `AX AV Studio` run on approachable, proven hardware:
 
 * **🖥️ A Multi-Core `x86_64` PC (6 Cores Recommended):** A classic desktop processor such as an Intel Core `i5-9600K` or `i5-8600K` with `16–32 GB` of RAM running Linux (`Piccolo [AX]` real-time kernel or standard desktop Linux).
-* **🔌 HiBy FC3 Portable USB DAC (ESS Sabre `ES9281AC Pro`):** A pocket-sized, £35-40 audiophile digital-to-analog converter that unlocks native `384 kHz / 32-bit` PCM and `DSD64 / DSD128` playback straight into your headphones, studio monitors, or hi-fi amplifier.
+* **🔌 HiBy FC3 Portable USB DAC (`VID 0x32BB`, ESS Sabre `ES9281AC Pro`):** A pocket-sized, **£29.67–£35** audiophile digital-to-analog converter that unlocks native `384 kHz / 32-bit` PCM and `DSD64 / DSD128` playback straight into your headphones (**Grado SR325x**) or desktop stereo amplifier (**Nobsound Q10** + **Wharfedale Diamond 9.0**).
 * **🎹 Optional USB MIDI Controller (Akai MPK Mini MK3):** Needed only if you want to play, patch, and sculpt sounds live in `AX AV Studio`—completely optional if you are using `flac_ax` purely as a hi-fi music transport.
 * **📺 Standard HDMI / DisplayPort Monitor:** Optional for headless hi-fi playback, or used to display the 60 FPS studio oscilloscope and 64-band FFT spectrum analyzer.
+
+---
 
 ## 🎬 The Big Picture: Why Your Everyday PC Isn’t Built Like a Hi-Fi Component or Hardware Synth
 
@@ -19,6 +23,8 @@ When you hit "Play" on a typical Windows or Mac desktop—or trigger a chord in 
 
 **FLAC_AX** (`flac_ax`) and **AX AV Studio** (`ax_av_studio`) solve both problems by treating a regular multi-core desktop PC not as an office machine, but as a **dedicated, bare-metal audiophile transport and live hardware-feel synthesizer**.
 
+---
+
 ## 🎼 Part 1: `flac_ax` — A Purist’s Digital Transport in Plain English
 
 Think of `flac_ax` as the digital equivalent of a heavyweight, vibration-isolated CD transport—except it plays high-resolution **FLAC** files and ultra-high-resolution **DSD** (Super Audio CD) studio masters straight from memory.
@@ -27,13 +33,13 @@ Think of `flac_ax` as the digital equivalent of a heavyweight, vibration-isolate
 
 Most music players read tiny chunks of a song off your SSD or network every few milliseconds while the music is playing, constantly waking the storage controller mid-phrase.
 
-* **The `flac_ax` approach:** Before a single note plays, `flac_ax` loads the **entire album straight into your computer's high-speed RAM**. Once playback begins, your drive goes completely idle—eliminating storage interrupts anywhere near the audio clock.
+* **The `flac_ax` approach:** Before a single note plays, `flac_ax` loads the **entire album straight into your computer's high-speed RAM** (`mlockall`). Once playback begins, your drive goes completely idle—eliminating storage interrupts anywhere near the audio clock.
 
 ### 2. A Direct Wire to Your HiBy FC3 DAC (No Mixers, No Resampling)
 
 Normally, your operating system acts like an unwanted mixing desk, converting sample rates, blending system alerts, and scaling volume digitally before handing audio to your DAC.
 
-* **The `flac_ax` approach:** It bypasses every software mixer and volume slider on the computer, opening a **direct, bit-for-bit `32-bit` hardware pipeline** straight into the **HiBy FC3**. Whether you are spinning a `44.1 kHz` CD rip, a `192 kHz / 32-bit` studio master, or native **DSD64 / DSD128** (`DoP`) recordings, the ESS Sabre chip receives the exact ones and zeros the mastering engineer printed.
+* **The `flac_ax` approach:** It bypasses every software mixer and volume slider on the computer, opening a **direct, bit-for-bit `32-bit` hardware pipeline** (`hw:CARD=FC3,DEV=0`) straight into the **HiBy FC3**. Whether you are spinning a `44.1 kHz` CD rip, a `192 kHz / 32-bit` studio master, or native **DSD64 / DSD128** (`DoP`) recordings, the ESS Sabre chip receives the exact ones and zeros the mastering engineer printed.
 
 ### 3. Dedicated "Traffic Lanes" Inside Your Processor
 
@@ -42,6 +48,8 @@ A modern 6-core CPU is like a six-lane motorway. On a normal PC, Windows or macO
 * **The Express Lane (Dedicated Audio Cores):** Reserved *exclusively* for feeding bit-exact audio to your DAC. Nothing else is permitted in this lane.
 * **The Prep Lane (Loading & MIDI Core):** Handles reading album files into RAM and polling your MIDI controller in the background.
 * **The Display Lane (Visual Cores):** Drives the 60 FPS screen graphics without ever stealing a single microsecond from the audio engine.
+
+---
 
 ## 🎹 Part 2: `ax_av_studio` — Classic Subtractive Synthesis & Studio FX at 2.0 ms Latency
 
@@ -53,15 +61,19 @@ Plug in an **Akai MPK Mini MK3**, and `ax_av_studio` responds in **2.00 millisec
 * **8-Voice Synthesized Drum Engine:** Dedicated percussion synthesis voices combining pitch-swept sine/triangle body oscillators with filtered white-noise transient bursts—delivering punchy *808/909*-style kicks, snappy snares, and crisp metallic hats straight from the MPK Mini's 16 velocity-sensitive pads.
 * **Cinema-Grade Live Visuals:** On your monitor, a VBlank-locked 60 FPS stereo oscilloscope and 64-band logarithmic FFT spectrum analyzer dance in lockstep with every note, filter sweep, and drum transient.
 
+---
+
 ## ⚖️ How Does It Compare to Boutique Hi-Fi & Studio Gear?
 
 | Feature | 💿 Subscription Hi-Fi Apps *(Roon / Audirvana)* | 🎛️ Standalone Hardware Boxes *(Elektron / MPC Live)* | ⚡ **FLAC_AX & AX AV Studio** |
 | :--- | :--- | :--- | :--- |
 | **Sound Purity** | Very high, but still shares the PC with background OS tasks | Clean, self-contained hardware path | **Direct-to-DAC bit-perfect path** with whole-album RAM playback |
 | **DSD & Studio Masters** | Supported (requires ongoing paid subscription) | Limited to standard 44.1 / 48 kHz internal audio | **Native FLAC (`384 kHz`) & DSD64 / DSD128** out of the box |
-| **Synth & Drum Architecture** | Playback only—not a musical instrument | Fixed-architecture embedded DSP (~3–5 ms latency) | **16-voice saw/sub SVF synth + 8-voice drum synth + stereo reverb & tape delay** at **2.0 ms** |
+| **Synth & Drum Architecture** | Playback only—not a musical instrument | Fixed-architecture embedded DSP (`~3–5 ms` latency) | **16-voice saw/sub SVF synth + 8-voice drum synth + stereo reverb & tape delay** at **2.00 ms** |
 | **Visual Feedback** | Album artwork & signal-path text | Small built-in LCD screen | **Full-screen 60 FPS stereo oscilloscope & 64-band log FFT analyzer** |
-| **Price Tag** | £120–£700+ software fees + dedicated streamer | £900–£1,500+ dedicated hardware unit | **Free & open-source**—runs on preserved desktop PC hardware + a £60 HiBy FC3 DAC |
+| **Price Tag** | £120–£700+ software fees + dedicated streamer | £900–£1,500+ dedicated hardware unit | **Free & open-source**—runs on preserved desktop PC hardware + a **£29.67–£35 HiBy FC3 DAC** |
+
+---
 
 ## 🎛️ Part 3: Inside the Three-Engine Sound Trio & MIDI Control Map
 
@@ -103,8 +115,10 @@ Under the hood, `ax_av_studio` chains **three purpose-built DSP engines** in ser
 ### 3. Why It Sounds Pure and Responds in 2.0 Milliseconds
 
 * **Zero Zipper Noise or Buffer Glitches:** Every delay line, comb filter, and lookup table across all three DSP engines is statically allocated upfront with zero heap calls on the audio thread. Delay-time transitions use sample-by-sample exponential smoothing, so sweeping knobs feels as liquid and immediate as turning a physical potentiometer on an analog synthesizer.
-* **Lock-Free `2.00 ms` Signal Chain (`Core 5` $\rightarrow$ `Core 0` $\rightarrow$ `HiBy FC3`):** The instant your finger strikes a key or twists an encoder on the MPK Mini MK3, `Core 5` captures the raw MIDI byte stream into a cache-line-aligned lock-free ring buffer and passes it straight to the real-time synthesis core—delivering unbuffered `32-bit` audio to the HiBy FC3 in **96 samples (`2.00 ms` at `48 kHz`)** with zero pops, clicks, or OS hesitation.
+* **Lock-Free `2.00 ms` Signal Chain (`Core 5` → `Core 0` → `HiBy FC3`):** The instant your finger strikes a key or twists an encoder on the MPK Mini MK3, `Core 5` captures the raw MIDI byte stream into a cache-line-aligned lock-free ring buffer and passes it straight to the real-time synthesis core—delivering unbuffered `32-bit` audio to the HiBy FC3 in **96 samples (`2.00 ms` at `48 kHz`)** with zero pops, clicks, or OS hesitation.
+
+---
 
 ## 🏁 The Bottom Line
 
-You don’t need a £2,000 brushed-aluminum network streamer to hear what your hi-fi system is truly capable of, nor do you need a rack full of vintage studio hardware to feel zero-latency analog-style synthesis under your fingers. Pair a preserved multi-core PC with a £35 **HiBy FC3** (and an optional **Akai MPK Mini MK3**), and **FLAC_AX** turns everyday silicon into a dead-quiet audiophile transport and an expressive, stage-ready synthesizer rig.
+You don’t need a £2,000 brushed-aluminum network streamer to hear what your hi-fi system is truly capable of, nor do you need a rack full of vintage studio hardware to feel zero-latency analog-style synthesis under your fingers. Pair a preserved multi-core PC with a **£29.67–£35 HiBy FC3**—feeding a **Nobsound Q10 + Wharfedale Diamond 9.0** desktop rig or **Grado SR325x** open-back headphones (plus an optional **Akai MPK Mini MK3**)—and **FLAC_AX** turns everyday silicon into a dead-quiet audiophile transport and an expressive, stage-ready synthesizer rig.
