@@ -404,6 +404,4 @@ private:
 };
 
 } // namespace flac_ax::ess
-```[cite: 25, 27, 28]
 
-Would you like to output the complete updated `hardware_profiles.json` next, or move on to another file?
