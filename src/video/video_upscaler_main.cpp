@@ -790,6 +790,14 @@ int main(int argc, char** argv) {
         const auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
                                     std::chrono::steady_clock::now() - last_report)
                                     .count();
+        frame_pts_us = synthetic_frame_idx * frame_step_us;
+        if (frame_pts_us <= elapsed_us + frame_step_us) {
+            have_frame = true;
+            ++synthetic_frame_idx;
+            ++last_seq;
+        }
+#endif
+
         if (have_frame) {
             const auto decision = pts_sync.EvaluateVideoFrame(frame_pts_us);
             if (decision.action == ax::video::FramePacingAction::HoldEarly && decision.hold_us > 0) {
