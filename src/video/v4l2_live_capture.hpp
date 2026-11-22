@@ -74,6 +74,14 @@ public:
             return false;
         }
 
+        for (auto& slot : slots_) {
+            slot.seq.store(0ULL, std::memory_order_relaxed);
+            slot.frame = CapturedFrame{};
+        }
+        active_slot_.store(0U, std::memory_order_relaxed);
+        last_consumed_seq_.store(0ULL, std::memory_order_relaxed);
+        dropped_frames_.store(0ULL, std::memory_order_relaxed);
+
         streaming_.store(true, std::memory_order_release);
         running_.store(true, std::memory_order_release);
         worker_ = std::thread(&V4l2LiveCaptureSource::CaptureLoop, this, pin_core);
@@ -93,15 +101,22 @@ public:
         CloseDevice();
     }
 
-    // Copies the latest available frame for low-latency live display/upscaling.
-    // Returns false if no new frame has been published since `last_seen_seq`.
+    // Lock-free seqlock copy of the latest published frame for Core 1 display/upscaling.
+    // Returns false if no new frame is available or if a concurrent write invalidated the read.
     bool CopyLatestFrame(CapturedFrame& dst, std::uint64_t& last_seen_seq) const {
         const std::uint32_t idx = active_slot_.load(std::memory_order_acquire);
-        const CapturedFrame& src = slots_[idx];
-        const std::uint64_t seq = seq_.load(std::memory_order_acquire);
-        if (seq == 0ULL || seq == last_seen_seq || src.payload.empty()) {
+        const FrameSlot& slot = slots_[idx];
+
+        const std::uint64_t seq1 = slot.seq.load(std::memory_order_acquire);
+        if ((seq1 & 1ULL) != 0ULL || seq1 == 0ULL || seq1 == last_seen_seq) {
             return false;
         }
+
+        const CapturedFrame& src = slot.frame;
+        if (src.payload.empty()) {
+            return false;
+        }
+
         dst.width = src.width;
         dst.height = src.height;
         dst.bytes_per_line = src.bytes_per_line;
@@ -109,7 +124,15 @@ public:
         dst.sequence = src.sequence;
         dst.monotonic_ts = src.monotonic_ts;
         dst.payload.assign(src.payload.begin(), src.payload.end());
-        last_seen_seq = seq;
+
+        std::atomic_thread_fence(std::memory_order_acquire);
+        const std::uint64_t seq2 = slot.seq.load(std::memory_order_relaxed);
+        if (seq1 != seq2) {
+            return false; // Writer touched this slot mid-copy; retry on next poll
+        }
+
+        last_seen_seq = seq1;
+        last_consumed_seq_.store(seq1, std::memory_order_relaxed);
         return true;
     }
 
@@ -122,6 +145,11 @@ private:
     struct MmapBuffer {
         void* start{MAP_FAILED};
         std::size_t length{0U};
+    };
+
+    struct FrameSlot {
+        alignas(64) std::atomic<std::uint64_t> seq{0ULL}; // Even = stable, Odd = writer active
+        CapturedFrame frame{};
     };
 
     static int Xioctl(int fd, unsigned long request, void* arg) noexcept {
@@ -251,6 +279,7 @@ private:
 
     void CaptureLoop(int pin_core) {
         PinCaptureThread(pin_core);
+        std::uint64_t publish_counter = 0ULL;
 
         while (running_.load(std::memory_order_acquire)) {
             fd_set rfds;
@@ -288,21 +317,30 @@ private:
                     static_cast<std::size_t>(dq.bytesused), buffers_[dq.index].length);
 
                 const std::uint32_t back = 1U - active_slot_.load(std::memory_order_relaxed);
-                CapturedFrame& slot = slots_[back];
-                slot.width = negotiated_width_;
-                slot.height = negotiated_height_;
-                slot.bytes_per_line = negotiated_stride_;
-                slot.format = negotiated_format_;
-                slot.sequence = dq.sequence;
-                slot.monotonic_ts = std::chrono::steady_clock::now();
-                slot.payload.assign(bytes, bytes + used);
+                FrameSlot& slot = slots_[back];
 
-                const std::uint64_t next_seq = seq_.load(std::memory_order_relaxed) + 1ULL;
-                if (next_seq > 1ULL && (next_seq - last_consumed_seq_.load(std::memory_order_acquire)) > 1ULL) {
+                // Begin seqlock write (odd sequence number)
+                const std::uint64_t odd_seq = (publish_counter * 2ULL) + 1ULL;
+                const std::uint64_t even_seq = odd_seq + 1ULL;
+                slot.seq.store(odd_seq, std::memory_order_release);
+
+                slot.frame.width = negotiated_width_;
+                slot.frame.height = negotiated_height_;
+                slot.frame.bytes_per_line = negotiated_stride_;
+                slot.frame.format = negotiated_format_;
+                slot.frame.sequence = dq.sequence;
+                slot.frame.monotonic_ts = std::chrono::steady_clock::now();
+                slot.frame.payload.assign(bytes, bytes + used);
+
+                // Commit seqlock write (even sequence number) and publish slot index
+                slot.seq.store(even_seq, std::memory_order_release);
+                active_slot_.store(back, std::memory_order_release);
+                ++publish_counter;
+
+                const std::uint64_t last_read = last_consumed_seq_.load(std::memory_order_relaxed);
+                if (last_read > 0ULL && (even_seq - last_read) > 2ULL) {
                     dropped_frames_.fetch_add(1ULL, std::memory_order_relaxed);
                 }
-                seq_.store(next_seq, std::memory_order_release);
-                active_slot_.store(back, std::memory_order_release);
             }
 
             if (Xioctl(fd_, VIDIOC_QBUF, &dq) < 0) {
@@ -322,9 +360,8 @@ private:
     std::uint32_t negotiated_stride_{0U};
 
     std::vector<MmapBuffer> buffers_;
-    std::array<CapturedFrame, 2> slots_{};
+    std::array<FrameSlot, 2> slots_{};
     std::atomic<std::uint32_t> active_slot_{0U};
-    std::atomic<std::uint64_t> seq_{0ULL};
     mutable std::atomic<std::uint64_t> last_consumed_seq_{0ULL};
     std::atomic<std::uint64_t> dropped_frames_{0ULL};
 };
