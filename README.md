@@ -97,6 +97,11 @@ ninja -C build -j 4
 
 ## 📚 Documentation
 
-* **[Complete Bare-Metal Audio, AV & Hardware Master Guide (UK)](FLAC_AX_Bare-Metal_Audio_AV_Appliance_Guide.md)** — Full hardware architecture, USB DAC silicon shootout, `udev` & WirePlumber exclusion rules, `ax-launch.sh` Core 0 launcher, Windows `FlexASIO.toml` fallback, and tiered system blueprints.
-* **[Transducer & Cabling Guide (Richer Sounds UK)](Speakers_Headphones_and_Wiring.md)** — Nearfield speaker selection (`Wharfedale Diamond 9.0` / `220`, `Q Acoustics 3010i`, `JBL Control One`), open-back headphones (`Grado SR325x`, `Sennheiser HD 560S`), desk placement geometry, and pre-terminated cabling.
-* **[Hi-Fi & Studio Enthusiast's Guide](Hi-Fi_and_Studio_Enthusiasts_Guide.md)** — Plain-English overview for audiophiles and musicians covering RAM-resident playback, the three-engine DSP trio, and Akai MPK Mini MK3 control mappings.
+## 📚 Documentation
+
+* **[Bare-Metal Audio, AV & Hardware Master Guide (UK)](docs/FLAC_AX_Bare-Metal_Audio_AV_Appliance_Guide.md)** — Complete UK hardware tiers anchored around the `[AX]` Reference Rig (`HiBy FC3` + `Nobsound Q10` + `Wharfedale Diamond 9.0` + `Grado SR325x`), Linux `6.12-rt` udev/WirePlumber rules, and Windows `FlexASIO.toml` setup.
+* **[Complete User Guide & Build Manual](docs/FLAC_AX_AVStudio_Complete_User_Guide.md)** — `2:3:1` CPU core topology, `/run/lock/ax-dac.lock` arbitration, CLI flags, and CMake/Ninja build reference.
+* **[Technical Architecture & Ecosystem Spec](docs/Architecture.md)** — Deep dive into clock-domain isolation, `mlockall` RAM preloading, `ax-sdk` (`v1_36_1`) integration, and internal DSP/HUD subsystems.
+* **[Speakers, Headphones & Wiring Guide](docs/Speakers_Headphones_and_Wiring.md)** — Nearfield equilateral placement, boundary EQ compensation, and cabling guide.
+* **[Hi-Fi & Studio Enthusiast's Guide](docs/Hi-Fi_and_Studio_Enthusiasts_Guide.md)** — Plain-English overview of whole-album RAM playback, bit-perfect ESS Sabre transport, and the `2.00 ms` three-engine synthesizer trio.
+* **[USB DAC Silicon Reference](docs/DACS.md)** — Comparative silicon breakdown and USB hardware IDs for supported UAC 2.0 front-ends.
