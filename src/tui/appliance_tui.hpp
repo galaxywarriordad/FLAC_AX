@@ -8,6 +8,7 @@
 #include <fstream>
 #include <string>
 #include <sys/file.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <vector>
 
@@ -26,22 +27,55 @@ constexpr const char* kBold         = "\033[1m";
 struct SystemTelemetry {
     bool dac_present = false;
     bool dac_locked  = false;
+    bool is_handheld = false;
+    std::string dac_name    = "HiBy FC3 [USB 0x32BB]";
     std::string dac_summary = "HiBy FC3 [USB 0x32BB] • STANDBY";
     std::string ram_summary = "RAM: -- / -- MB";
     int temp_c = 0;
 };
+
+inline unsigned int DetectConsoleCols() noexcept {
+    struct winsize ws {};
+    if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+        return ws.ws_col;
+    }
+    return 80U;
+}
 
 inline SystemTelemetry ProbeTelemetry() {
     SystemTelemetry t;
 
     std::ifstream cards("/proc/asound/cards");
     std::string line;
+    bool has_rk817 = false;
     while (std::getline(cards, line)) {
-        if (line.find("FC3") != std::string::npos ||
-            line.find("HiBy") != std::string::npos ||
-            line.find("USB-Audio") != std::string::npos) {
+        if (line.find("FC3") != std::string::npos || line.find("HiBy") != std::string::npos) {
             t.dac_present = true;
+            t.dac_name = "HiBy FC3 [USB 0x32BB]";
             break;
+        }
+        if (line.find("BLACKPEARL") != std::string::npos || line.find("TRN") != std::string::npos) {
+            t.dac_present = true;
+            t.dac_name = "TRN Black Pearl [CS43131]";
+            break;
+        }
+        if (line.find("KA11") != std::string::npos || line.find("FiiO") != std::string::npos) {
+            t.dac_present = true;
+            t.dac_name = "FiiO KA11 [CS43131]";
+            break;
+        }
+        if (line.find("DAWNPRO2") != std::string::npos || line.find("Dawn") != std::string::npos) {
+            t.dac_present = true;
+            t.dac_name = "Moondrop Dawn Pro 2";
+            break;
+        }
+        if (line.find("USB-Audio") != std::string::npos) {
+            t.dac_present = true;
+            t.dac_name = "UAC 2.0 USB DAC";
+            break;
+        }
+        if (line.find("rockchiprk817") != std::string::npos || line.find("rk817") != std::string::npos) {
+            has_rk817 = true;
         }
     }
 
@@ -58,10 +92,16 @@ inline SystemTelemetry ProbeTelemetry() {
 
     if (t.dac_present) {
         t.dac_summary = t.dac_locked
-            ? "HiBy FC3 [USB 0x32BB] • 32-bit S32_LE @ 192kHz • 2.00ms [LOCKED]"
-            : "HiBy FC3 [USB 0x32BB] • 32-bit S32_LE Ready [UNLOCKED]";
+            ? (t.dac_name + " • S32_LE [LOCKED]")
+            : (t.dac_name + " • S32_LE Ready [UNLOCKED]");
+    } else if (has_rk817) {
+        t.dac_present = true;
+        t.dac_name = "RK817 3.5mm / Mono";
+        t.dac_summary = t.dac_locked
+            ? "RK817 Codec • 3.5mm/Speaker [LOCKED]"
+            : "RK817 Codec • 3.5mm/Speaker Ready";
     } else {
-        t.dac_summary = "USB Audio DAC [0x32BB] • Not Connected";
+        t.dac_summary = "Audio DAC • Not Connected";
     }
 
     std::ifstream meminfo("/proc/meminfo");
@@ -76,8 +116,10 @@ inline SystemTelemetry ProbeTelemetry() {
     if (mem_total_kb > 0) {
         uint64_t used_mb  = (mem_total_kb - mem_avail_kb) / 1024;
         uint64_t total_mb = mem_total_kb / 1024;
+        t.is_handheld = (total_mb <= 1536ULL);
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "EROFS TORAM  |  RAM: %llu / %llu MB",
+        std::snprintf(buf, sizeof(buf), "%s  |  RAM: %llu / %llu MB",
+                      t.is_handheld ? "SQUASHFS SD" : "EROFS TORAM",
                       static_cast<unsigned long long>(used_mb),
                       static_cast<unsigned long long>(total_mb));
         t.ram_summary = buf;
@@ -101,15 +143,27 @@ struct MenuItem {
 inline void RenderScreen(const std::vector<MenuItem>& items,
                          size_t selected_idx,
                          const SystemTelemetry& tel) {
+    const unsigned int cols = DetectConsoleCols();
+    const bool compact = (cols <= 80U);
+
     std::printf("%s\033[2J\033[H", kBgEspresso);
 
-    std::printf("\n  %s%sPICCOLO [AX] REAL-TIME APPLIANCE%s  %s|  Core 5 UI Plane (0x20)%s\n",
-                kBold, kFgCream, kReset, kFgMuted, kReset);
-    std::printf("  %s──────────────────────────────────────────────────────────────────────────%s\n",
-                kFgCoffee, kReset);
+    if (compact || tel.is_handheld) {
+        std::printf("\n %s%sPICCOLO_2GO [AX]%s %s| 1:2:1 RK3326 (Core 3 UI)%s\n",
+                    kBold, kFgCream, kReset, kFgMuted, kReset);
+        std::printf(" %s────────────────────────────────────────────────────────────────────────%s\n",
+                    kFgCoffee, kReset);
+        std::printf(" %s[ CORES 0-2: RT AUDIO/EMU ]%s  %s[ CORE 3: IO/UI ]%s\n",
+                    kFgCoffee, kReset, kFgMuted, kReset);
+    } else {
+        std::printf("\n  %s%sPICCOLO [AX] REAL-TIME APPLIANCE%s  %s|  Core 5 UI Plane (0x20)%s\n",
+                    kBold, kFgCream, kReset, kFgMuted, kReset);
+        std::printf("  %s──────────────────────────────────────────────────────────────────────────%s\n",
+                    kFgCoffee, kReset);
+        std::printf("  %s[ CORES 0-4: RT LOCKSTEP ]%s   %s[ CORE 5: CAPTURE / IO ]%s\n",
+                    kFgCoffee, kReset, kFgMuted, kReset);
+    }
 
-    std::printf("  %s[ CORES 0-4: RT LOCKSTEP ]%s   %s[ CORE 5: CAPTURE / IO ]%s\n",
-                kFgCoffee, kReset, kFgMuted, kReset);
     std::printf("  %s%s%s\n", kFgCream, tel.dac_summary.c_str(), kReset);
     if (tel.temp_c > 0) {
         std::printf("  %s%s  |  TEMP: %d°C%s\n", kFgMuted, tel.ram_summary.c_str(), tel.temp_c, kReset);
@@ -118,25 +172,38 @@ inline void RenderScreen(const std::vector<MenuItem>& items,
     }
 
     std::printf("\n  %s%sAPPLIANCE LAUNCHER%s\n", kBold, kFgCoffee, kReset);
-    std::printf("  %s──────────────────────────────────────────────────────────────────────────%s\n",
+    std::printf("  %s────────────────────────────────────────────────────────────────────────%s\n",
                 kFgMuted, kReset);
 
     for (size_t i = 0; i < items.size(); ++i) {
-        if (i == selected_idx) {
-            std::printf("  %s%s > [%zu] %-26s — %-34s %s\n",
-                        kBgHighlight, kFgEspresso, i + 1,
-                        items[i].title, items[i].subtitle, kReset);
+        if (compact || tel.is_handheld) {
+            if (i == selected_idx) {
+                std::printf(" %s%s > [%zu] %-22s — %-30.30s %s\n",
+                            kBgHighlight, kFgEspresso, i + 1,
+                            items[i].title, items[i].subtitle, kReset);
+            } else {
+                std::printf(" %s%s   [%zu] %s%-22s%s %s— %-30.30s%s\n",
+                            kBgEspresso, kFgMuted, i + 1,
+                            kFgCream, items[i].title, kReset,
+                            kFgMuted, items[i].subtitle, kReset);
+            }
         } else {
-            std::printf("  %s%s   [%zu] %s%-26s%s %s— %-34s%s\n",
-                        kBgEspresso, kFgMuted, i + 1,
-                        kFgCream, items[i].title, kReset,
-                        kFgMuted, items[i].subtitle, kReset);
+            if (i == selected_idx) {
+                std::printf("  %s%s > [%zu] %-26s — %-34s %s\n",
+                            kBgHighlight, kFgEspresso, i + 1,
+                            items[i].title, items[i].subtitle, kReset);
+            } else {
+                std::printf("  %s%s   [%zu] %s%-26s%s %s— %-34s%s\n",
+                            kBgEspresso, kFgMuted, i + 1,
+                            kFgCream, items[i].title, kReset,
+                            kFgMuted, items[i].subtitle, kReset);
+            }
         }
     }
 
-    std::printf("  %s──────────────────────────────────────────────────────────────────────────%s\n",
+    std::printf("  %s────────────────────────────────────────────────────────────────────────%s\n",
                 kFgMuted, kReset);
-    std::printf("  %s↑/↓%s SELECT   %s|%s   %sENTER%s LAUNCH   %s|%s   %sR%s REFRESH   %s|%s   %sQ%s SHELL\n",
+    std::printf("  %s↑/↓%s SELECT  %s|%s  %sENTER%s LAUNCH  %s|%s  %sR%s REFRESH  %s|%s  %sQ%s SHELL\n",
                 kFgCoffee, kReset, kFgMuted, kReset,
                 kFgCoffee, kReset, kFgMuted, kReset,
                 kFgCoffee, kReset, kFgMuted, kReset,
