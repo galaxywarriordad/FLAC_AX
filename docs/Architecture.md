@@ -16,14 +16,12 @@ On the reference 6-core i5-9600K topology (coffee\_lake\_9600k in ax-sdk), FLAC\
 
 | Core Mask | Logical Core(s) | Domain Role | flac\_ax (Audiophile Mode) | ax\_av\_studio (A/V Studio Mode) | ax\_video\_upscaler (Video Upscaler) |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| 0x01 | Core 0 | ESS Audio Clock / IRQ | Pinned SCHED\_FIFO (80) ALSA snd\_pcm\_writei writer \+ USB xHCI IRQ locked to HiBy FC3 clock (S32\_LE, 44.1-384 kHz, DoP 176.4/352.8 kHz) | Pinned SCHED\_FIFO (80) ALSA snd\_pcm\_writei writer \+ USB xHCI IRQ (S32\_LE, 48 kHz, 96\-frame period) | Pinned SCHED\_FIFO (80) ALSA snd\_pcm\_writei writer advancing AudioMasterPtsSync from committed ESS frames |
+| 0x01 | Core 0 | ESS Audio Clock / IRQ | Pinned SCHED\_FIFO (80) ALSA snd\_pcm\_writei writer \+ USB xHCI IRQ locked to HiBy FC3 clock (S32\_LE, 44.1-384 kHz, DoP 176.4/352.8 kHz) | Pinned SCHED\_FIFO (80) ALSA snd\_pcm\_writei writer \+ USB xHCI IRQ (S32\_LE, 48 kHz, 96-frame period) | Pinned SCHED\_FIFO (80) ALSA snd\_pcm\_writei writer advancing AudioMasterPtsSync from committed ESS frames |
 | 0x02 | Core 1 | Video / HUD | Idle (available for foreground workload) | Pinned VBlank-locked (SDL\_GL\_SetSwapInterval(1)) OpenGL Studio HUD on GTX 980 Ti (60/120 Hz) | Pinned Core1UpscaleStage (720p / 1080p / 2k presets, VBlank-paced against ESS AudioMasterPtsSync) |
-| 0x1C | Cores 2-4 | Emulation / DSP | Reserved exclusively for foreground emulators (Eden, Cemu, Generation-X-AX) | FullFeatureSynthEngine (16 melodic voices \+ 8 drum voices, 2-pole SVF low-pass, StereoReverbDsp, TapeDelayDsp & 1024\-pt Hann FFT) | Reserved / idle for foreground emulation or studio workloads |
-| 0x20 | Core 5 | Housekeeping / I/O | Pinned SCHED\_OTHER FLAC/DSD decoder & RamFilePreloader (FLAC::Decoder::File / DoP stream) | Pinned SCHED\_OTHER MpkMini3Listener (snd\_rawmidi\_open non-blocking reader \+ off-RT MpkMini3OledFeedback) | Pinned V4l2LiveCaptureSource (storage\_aux\_mask \== 0x20ULL \-\> Core 5) MMAP capture (YUYV / MJPEG) |
+| 0x1C | Cores 2-4 | Emulation / DSP | Reserved exclusively for foreground emulators (Eden, Cemu, Generation-X-AX) | FullFeatureSynthEngine (16 melodic voices \+ 8 drum voices, 2-pole SVF low-pass, StereoReverbDsp, TapeDelayDsp & 1024-pt Hann FFT) | Reserved / idle for foreground emulation or studio workloads |
+| 0x20 | Core 5 | Housekeeping / I/O | Pinned SCHED\_OTHER FLAC/DSD decoder & RamFilePreloader (FLAC::Decoder::File / DsdDopStreamer) | Pinned SCHED\_OTHER MpkMini3Listener (snd\_rawmidi\_open non-blocking reader \+ off-RT MpkMini3OledFeedback) | Pinned V4l2LiveCaptureSource (storage\_aux\_mask \== 0x20ULL \-\> Core 5\) MMAP capture (YUYV / MJPEG) |
 
 ### **End-to-End Signal & Clock-Domain Diagram**
-
-Plaintext
 
 ```
 +-----------------------------------------------------------------------------+
@@ -74,7 +72,7 @@ Plaintext
   * WholeAlbum (\>= 16 GiB RAM, default on 32 GB rig): Loads tracks into RamFilePreloader up to an 8 GiB cap (8ULL \* 1024ULL \* 1024ULL \* 1024ULL)  
   * Window3Files (6.5 GiB to \< 16 GiB RAM): Maintains a sliding 3-track window in RAM (2 GiB cap), evicting completed entries behind current\_index  
   * SingleFile (\< 6.5 GiB RAM or \< 2 GiB MemAvailable): Restricts preloading to a 512 MiB cap  
-* **Stream Decoding (FlacRingDecoder & DsdDopStreamer):** Decodes FLAC tracks via FLAC::Decoder::File into the stereo S32\_LE ring buffer and streams .dsf / .dff (DSD64 at 176.4 kHz DoP, DSD128 at 352.8 kHz DoP) via DsdDopStreamer (note: main.cpp currently references flac\_ax::preload::RamFilePreloader / PreloadedEntry / TryLoad and DopPacker::PackStereoFrame, which need alignment with preload\_policy.hpp and ess\_dac\_hooks.hpp)
+* **Stream Decoding (FlacRingDecoder & DsdDopStreamer):** PersistentDecoderWorker refreshes the preload window on Core 5 (preloader.RefreshWindow(tracks\_, idx)), inspects preloader.Find(path), and routes .dsf / .dff tracks through DsdTrackSession / DsdDopStreamer (176.4 kHz DoP for DSD64, 352.8 kHz DoP for DSD128 via DopPacker::PackStereoFrame) or FLAC tracks through FlacRingDecoder into StereoFrameRing (262,144 frames)
 
 ### **Physical USB Host Controller Port Separation**
 
@@ -83,17 +81,17 @@ Plaintext
 
 ## **3\. Internal Subsystems (src/ & CMakeLists.txt)**
 
-1. **Build Targets (CMakeLists.txt):** Builds three executables when FLAC\_AX\_BUILD\_LINUX\_APPLIANCE is enabled: flac\_ax (src/main.cpp), ax\_av\_studio (src/studio\_main.cpp), and ax\_video\_upscaler (src/video\_upscaler\_main.cpp), linking ax::core (ax-sdk v1\_36\_1 via find\_package(ax-sdk) with FetchContent fallback), FLAC++ / FLAC, asound, and optional SDL2 \+ OpenGL (FLAC\_AX\_HAS\_SDL2\_GL)  
+1. **Build Targets (CMakeLists.txt):** Builds flac\_ax (src/main.cpp) plus optional ax\_av\_studio (FLAC\_AX\_BUILD\_AV\_STUDIO=ON) and ax\_video\_upscaler (FLAC\_AX\_BUILD\_VIDEO\_UPSCALER=ON), linking ax::core (ax-sdk v1\_36\_1 via find\_package(ax-sdk) with FetchContent fallback), FLAC++ / FLAC, asound, and optional SDL2 \+ OpenGL (FLAC\_AX\_ENABLE\_SDL2\_GL / FLAC\_AX\_HAS\_SDL2\_GL)  
 2. **ESS Sabre Hardware Hooks, DoP Packer & Mixer (src/ess\_dac\_hooks.hpp & src/dsd\_dop\_reader.hpp):**  
    * Resolves ES9281AC Pro and ES9281PRO profiles (MakeEssProfile, ResolveEssChipHook), recommended load volumes (RecommendedVolumeForTarget), sample rate negotiation (NegotiateEssRate within \[44100 Hz, 384000 Hz\]), and buffer period counts (RecommendedBufferPeriods: 8 at \>= 176.4 kHz, 4 otherwise)  
-   * Provides DopPacker (0x05 / 0xFA markers) and ParseDsdMemoryHeader / ParseDsdFileHeader / DsdDopStreamer for .dsf and .dff streams  
-   * Provides EssHardwareMixer (\--volume / \--mixer-card) to control ALSA playback volume on the target card (FC3 default)  
+   * Provides DopPacker (0x05 / 0xFA markers, PackStereoFrame, PackStereoInterleaved) and ParseDsdMemoryHeader / ParseDsdFileHeader / DsdDopStreamer for .dsf and .dff streams  
+   * Provides EssHardwareMixer (--volume / \--mixer-card) to control ALSA playback volume on the target card (FC3 default)  
 3. **Akai MPK Mini MK3 ALSA RawMIDI & OLED Feedback (src/midi/mpk\_mini3.hpp, .cpp & src/midi/mpk\_mini3\_oled.hpp):**  
    * Auto-discovers MPKmini3 in /proc/asound/cards (hw:CARD=MPKmini3,DEV=0), reads non-blocking ALSA RawMIDI on Core 5, parses running status \+ SysEx framing (0xF0..0xF7), and pushes events into a 1,024-entry lock-free SPSC queue  
    * MpkMini3OledFeedback rate-limits (45 ms default interval) off-RT parameter/SysEx feedback for K1-K8 (CC 70-77)  
 4. **Synthesizer & Effects DSP (src/dsp/full\_feature\_synth.hpp, src/dsp/stereo\_reverb\_dsp.hpp, src/dsp/tape\_delay\_dsp.hpp & src/dsp/avx2\_synth.hpp/.cpp):**  
-   * FullFeatureSynthEngine (used by studio\_main.cpp) runs 16 melodic voices \+ 8 drum voices, a 2-pole SVF low-pass filter \+ soft saturation, StereoReverbDsp, TapeDelayDsp, and a 1024\-point Hann-windowed radix-2 FFT \+ 256\-sample stereo scope into double-buffered VisualSnapshot slots  
-   * PolySynthEngine (src/dsp/avx2\_synth.hpp/.cpp) provides the standalone 16-voice saw+sub \+ 2-pole SVF \+ 1024\-pt FFT engine  
+   * FullFeatureSynthEngine (used by studio\_main.cpp) runs 16 melodic voices \+ 8 drum voices, a 2-pole SVF low-pass filter \+ soft saturation, StereoReverbDsp, TapeDelayDsp, and a 1024-point Hann-windowed radix-2 FFT \+ 256-sample stereo scope into double-buffered VisualSnapshot slots  
+   * PolySynthEngine (src/dsp/avx2\_synth.hpp/.cpp) provides the standalone 16-voice saw+sub \+ 2-pole SVF \+ 1024-pt FFT engine  
 5. **720p/1080p/2K Video Upscaler & Audio-Master Sync (src/video\_upscaler\_main.cpp & src/video/\*.hpp):**  
    * Resolves hardware guardrails via Resolve720pGuardrails (5.50 GiB VRAM ceiling, 5.00 GiB reap trigger, 0x20 storage/aux mask)  
    * Captures live retro video on Core 5 via V4l2LiveCaptureSource (YUYV / MJPEG MMAP) or paces DVD streams, paces frames via AudioMasterPtsSync (AudioMasterDvd / LiveLowLatency) against the ESS audio clock, and runs Core1UpscaleStage on Core 1 with kUpscale720pFragmentShader (240p, bob, dvd scan modes)  
@@ -107,12 +105,12 @@ FLAC\_AX integrates with ax-sdk (v1\_36\_1), Piccolo-AX (batocera-ax-external), 
 
 ### **Delivered in Current Tree**
 
-* Core audio (src/main.cpp), studio synth/MIDI/OLED runner (src/studio\_main.cpp), and 720p/1080p/2K video upscaler runner (src/video\_upscaler\_main.cpp) wired in CMakeLists.txt  
-* src/ess\_dac\_hooks.hpp, src/dsd\_dop\_reader.hpp, src/preload\_policy.hpp, src/midi/mpk\_mini3.\*, src/midi/mpk\_mini3\_oled.hpp, src/dsp/full\_feature\_synth.hpp, src/dsp/stereo\_reverb\_dsp.hpp, src/dsp/tape\_delay\_dsp.hpp, src/dsp/avx2\_synth.\*, and src/video/\*.hpp
+* Core audio (src/main.cpp), studio synth/MIDI/OLED runner (src/studio\_main.cpp), and 720p/1080p/2K video upscaler runner (src/video\_upscaler\_main.cpp) wired in CMakeLists.txt with FLAC\_AX\_ENABLE\_SDL2\_GL / FLAC\_AX\_HAS\_SDL2\_GL  
+* Reconciled DopPacker::PackStereoFrame (src/ess\_dac\_hooks.hpp) with DsdDopStreamer (src/dsd\_dop\_reader.hpp) and RamFilePreloader windowing (src/preload\_policy.hpp) in src/main.cpp  
+* src/midi/mpk\_mini3.\*, src/midi/mpk\_mini3\_oled.hpp, src/dsp/full\_feature\_synth.hpp, src/dsp/stereo\_reverb\_dsp.hpp, src/dsp/tape\_delay\_dsp.hpp, src/dsp/avx2\_synth.\*, and src/video/\*.hpp
 
 ### **Remaining Fixes & Milestones**
 
-1. **Reconcile main.cpp, preload\_policy.hpp, ess\_dac\_hooks.hpp, and dsd\_dop\_reader.hpp:** Align RamFilePreloader constructor/API usage in main.cpp with preload\_policy.hpp and add DopPacker::PackStereoFrame (or call PackStereoInterleaved) so flac\_ax compiles cleanly  
+1. **Harden V4L2 frame handoff & CLI validation:** Protect CapturedFrame slot copies in src/video/v4l2\_live\_capture.hpp against torn reads between Core 5 and Core 1, and replace std::stod / std::stoul in src/studio\_main.cpp with validated parsing  
 2. **Complete Core1UpscaleStage shader/texture upload:** Compile kUpscale720pFragmentShader and bind CapturedFrame Y/UV textures in Core1UpscaleStage::RenderFrame instead of clearing to a solid color  
 3. **Package in Piccolo-AX (batocera-ax-external):** Wire flac\_ax, ax\_av\_studio, and ax\_video\_upscaler into Buildroot and deploy udev rules for VID 0x32BB
-
