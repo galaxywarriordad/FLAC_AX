@@ -1,6 +1,8 @@
 #include "appliance_tui.hpp"
+#include "ax/input.hpp"
 
 #include <cstdlib>
+#include <poll.h>
 #include <sched.h>
 #include <termios.h>
 #include <unistd.h>
@@ -36,7 +38,6 @@ private:
 void PinUiToHousekeepingCore(bool is_handheld) {
     cpu_set_t set;
     CPU_ZERO(&set);
-    // Core 3 (0x08) on 4-core RK3326 handhelds; Core 5 (0x20) on 6-core x86_64 desktop
     CPU_SET(is_handheld ? 3 : 5, &set);
     ::sched_setaffinity(0, sizeof(set), &set);
 }
@@ -70,43 +71,78 @@ int main() {
         tel.is_handheld ? handheld_items : desktop_items;
 
     RawTerminalGuard term_guard;
+    ax::input::EvdevNavReader pad_nav;
+    pad_nav.OpenAll();
     size_t selected = 0;
 
     while (true) {
         tel = ax::tui::ProbeTelemetry();
         ax::tui::RenderScreen(items, selected, tel);
 
-        char ch = 0;
-        if (::read(STDIN_FILENO, &ch, 1) <= 0) {
+        std::vector<struct pollfd> pfds;
+        pfds.push_back({STDIN_FILENO, POLLIN, 0});
+        for (int fd : pad_nav.fds()) {
+            pfds.push_back({fd, POLLIN, 0});
+        }
+
+        if (::poll(pfds.data(), static_cast<nfds_t>(pfds.size()), -1) <= 0) {
             continue;
         }
 
-        if (ch == '\033') {
-            char seq = 0;
-            if (::read(STDIN_FILENO, &seq, 1) == 1 && seq == '[') {
-                if (::read(STDIN_FILENO, &seq, 1) == 1) {
-                    if (seq == 'A') { // Up arrow
-                        selected = (selected == 0) ? (items.size() - 1) : (selected - 1);
-                    } else if (seq == 'B') { // Down arrow
-                        selected = (selected + 1) % items.size();
+        bool launch = false;
+        bool quit   = false;
+
+        if (pfds[0].revents & POLLIN) {
+            char ch = 0;
+            if (::read(STDIN_FILENO, &ch, 1) == 1) {
+                if (ch == '\033') {
+                    char seq[2] = {0, 0};
+                    if (::read(STDIN_FILENO, &seq[0], 1) == 1 && seq[0] == '[') {
+                        if (::read(STDIN_FILENO, &seq[1], 1) == 1) {
+                            if (seq[1] == 'A') {
+                                selected = (selected == 0) ? (items.size() - 1) : (selected - 1);
+                            } else if (seq[1] == 'B') {
+                                selected = (selected + 1) % items.size();
+                            }
+                        }
                     }
+                } else if (ch == 'k' || ch == 'K') {
+                    selected = (selected == 0) ? (items.size() - 1) : (selected - 1);
+                } else if (ch == 'j' || ch == 'J') {
+                    selected = (selected + 1) % items.size();
+                } else if (ch >= '1' && ch <= static_cast<char>('0' + items.size())) {
+                    selected = static_cast<size_t>(ch - '1');
+                } else if (ch == 'q' || ch == 'Q') {
+                    quit = true;
+                } else if (ch == '\r' || ch == '\n') {
+                    launch = true;
                 }
             }
-        } else if (ch == 'k' || ch == 'K') {
-            selected = (selected == 0) ? (items.size() - 1) : (selected - 1);
-        } else if (ch == 'j' || ch == 'J') {
-            selected = (selected + 1) % items.size();
-        } else if (ch >= '1' && ch <= static_cast<char>('0' + items.size())) {
-            selected = static_cast<size_t>(ch - '1');
-        } else if (ch == 'r' || ch == 'R') {
-            continue;
-        } else if (ch == 'q' || ch == 'Q') {
-            break;
-        } else if (ch == '\r' || ch == '\n') {
+        }
+
+        switch (pad_nav.PollNonBlocking()) {
+            case ax::input::NavAction::Up:
+                selected = (selected == 0) ? (items.size() - 1) : (selected - 1);
+                break;
+            case ax::input::NavAction::Down:
+                selected = (selected + 1) % items.size();
+                break;
+            case ax::input::NavAction::Confirm:
+                launch = true;
+                break;
+            default:
+                break;
+        }
+
+        if (quit) break;
+
+        if (launch) {
+            pad_nav.CloseAll();
             std::printf("%s\033[2J\033[H", ax::tui::kReset);
             std::fflush(stdout);
             int rc = std::system(items[selected].command);
             (void)rc;
+            pad_nav.OpenAll();
         }
     }
 
