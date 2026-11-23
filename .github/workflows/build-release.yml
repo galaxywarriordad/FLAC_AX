@@ -1,0 +1,77 @@
+name: Build Release Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      skylake_arch:
+        description: "Enable Skylake / AVX2 tuning (-march=skylake / /arch:AVX2)"
+        type: boolean
+        default: true
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout FLAC_AX
+        uses: actions/checkout@v5
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev
+
+      - name: Configure & Build (Release + LTO)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFLAC_AX_USE_AX_SDK=ON \
+            -DFLAC_AX_BUILD_AV_STUDIO=ON \
+            -DFLAC_AX_BUILD_VIDEO_UPSCALER=ON \
+            -DFLAC_AX_BUILD_APPLIANCE_TUI=ON \
+            -DFLAC_AX_ENABLE_OPENMPT=ON \
+            -DFLAC_AX_ENABLE_SDL2_GL=ON \
+            -DFLAC_AX_SKYLAKE_ARCH=${{ inputs.skylake_arch }} \
+            -DFLAC_AX_ENABLE_LTO=ON
+          ninja -C build -j"$(nproc)"
+          strip build/flac_ax build/ax_av_studio build/ax_video_upscaler build/ax_appliance_tui
+
+      - name: Upload Linux Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flac-ax-linux-x86_64
+          path: |
+            build/flac_ax
+            build/ax_av_studio
+            build/ax_video_upscaler
+            build/ax_appliance_tui
+          retention-days: 14
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout FLAC_AX
+        uses: actions/checkout@v5
+
+      - name: Configure & Build (Release + LTO)
+        run: |
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DFLAC_AX_USE_AX_SDK=ON `
+            -DFLAC_AX_BUILD_AV_STUDIO=ON `
+            -DFLAC_AX_BUILD_VIDEO_UPSCALER=ON `
+            -DFLAC_AX_BUILD_APPLIANCE_TUI=OFF `
+            -DFLAC_AX_SKYLAKE_ARCH=${{ inputs.skylake_arch }} `
+            -DFLAC_AX_ENABLE_LTO=ON
+          cmake --build build --config Release --parallel
+
+      - name: Upload Windows Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flac-ax-windows-x86_64
+          path: |
+            build/flac_ax.exe
+            build/ax_av_studio.exe
+            build/ax_video_upscaler.exe
+          retention-days: 14
