@@ -51,7 +51,7 @@ inline SystemTelemetry ProbeTelemetry() {
     while (std::getline(cards, line)) {
         if (line.find("FC3") != std::string::npos || line.find("HiBy") != std::string::npos) {
             t.dac_present = true;
-            t.dac_name = "HiBy FC3 [USB 0x32BB]";
+            t.dac_name = "HiBy FC3 1.3V [USB 0x32BB]";
             break;
         }
         if (line.find("BLACKPEARL") != std::string::npos || line.find("TRN") != std::string::npos) {
@@ -117,7 +117,7 @@ inline SystemTelemetry ProbeTelemetry() {
         uint64_t used_mb  = (mem_total_kb - mem_avail_kb) / 1024;
         uint64_t total_mb = mem_total_kb / 1024;
         t.is_handheld = (total_mb <= 1536ULL);
-        char buf[64];
+        char buf[128];
         std::snprintf(buf, sizeof(buf), "%s  |  RAM: %llu / %llu MB",
                       t.is_handheld ? "SQUASHFS SD" : "EROFS TORAM",
                       static_cast<unsigned long long>(used_mb),
@@ -149,14 +149,14 @@ inline void RenderScreen(const std::vector<MenuItem>& items,
     std::printf("%s\033[2J\033[H", kBgEspresso);
 
     if (compact || tel.is_handheld) {
-        std::printf("\n %s%sPICCOLO_2GO [AX]%s %s| 1:2:1 RK3326 (Core 3 UI)%s\n",
+        std::printf("\n %s%sPICCOLO_2GO%s %s(Optimised with AX tech) | 1:2:1 RK3326%s\n",
                     kBold, kFgCream, kReset, kFgMuted, kReset);
         std::printf(" %s────────────────────────────────────────────────────────────────────────%s\n",
                     kFgCoffee, kReset);
         std::printf(" %s[ CORES 0-2: RT AUDIO/EMU ]%s  %s[ CORE 3: IO/UI ]%s\n",
                     kFgCoffee, kReset, kFgMuted, kReset);
     } else {
-        std::printf("\n  %s%sPICCOLO [AX] REAL-TIME APPLIANCE%s  %s|  Core 5 UI Plane (0x20)%s\n",
+        std::printf("\n  %s%sPICCOLO REAL-TIME APPLIANCE%s  %s(Optimised with AX tech) | Core 5 UI%s\n",
                     kBold, kFgCream, kReset, kFgMuted, kReset);
         std::printf("  %s──────────────────────────────────────────────────────────────────────────%s\n",
                     kFgCoffee, kReset);
