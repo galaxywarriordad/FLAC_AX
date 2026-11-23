@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk (v1_36_1)" ON)
+option(FLAC_AX_USE_AX_SDK "Fetch and link ax-sdk" ON)
 option(FLAC_AX_BUILD_AV_STUDIO "Build ax_av_studio (MPK Mini MK3 + AVX2 Synth + A/V HUD)" ON)
 option(FLAC_AX_BUILD_VIDEO_UPSCALER "Build single-stream 720p/1080p/2K DVD & V4L2 retro upscaler (ax_video_upscaler)" ON)
 option(FLAC_AX_BUILD_APPLIANCE_TUI "Build Core 5 Espresso Real-Time Appliance TUI (ax_appliance_tui)" ON)
@@ -63,7 +63,7 @@ if(FLAC_AX_USE_AX_SDK)
             FetchContent_Declare(
                 ax_sdk
                 GIT_REPOSITORY "${_ax_proto}://${_ax_host}/${_ax_repo}"
-                GIT_TAG        v1_36_2
+                GIT_TAG        main
                 GIT_SHALLOW    FALSE
             )
             FetchContent_MakeAvailable(ax_sdk)
@@ -193,7 +193,7 @@ endif()
 # --- 4. Core 5 Espresso Real-Time Appliance Launcher TUI ---
 if(UNIX AND NOT APPLE AND FLAC_AX_BUILD_APPLIANCE_TUI)
     add_executable(ax_appliance_tui
-        src/appliance_tui_main.cpp
+        src/tui/appliance_tui_main.cpp
         ${FLAC_AX_TUI_HEADERS}
     )
     flac_ax_apply_target_flags(ax_appliance_tui)
