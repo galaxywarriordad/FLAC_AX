@@ -26,7 +26,7 @@ inline constexpr std::array<ApplianceEntry, 5> kApplianceEntries{{
 	{'1', "FLAC / DoP Player", "Bit-perfect ESS Sabre audio (Core 0 SCHED_FIFO 80)", "flac_ax"},
 	{'2', "AX Audio/Visual Studio", "MPK Mini MK3 + AVX2 Synth + GL HUD", "ax_av_studio"},
 	{'3', "DVD / HDMI Upscaler", "720p / 1080p / 2K single-stream scaler", "ax_video_upscaler"},
-	{'4', "Encode 640x480 (G350)", "Core 5 QSV + GTX 980 Ti -> 640x480 60fps/30fps 48kHz AAC", "ax_encode_2go"},
+	{'4', "Encode 640x480 (G350)", "Core 5 QSV + GTX 980 Ti -> 640x480 auto 60/30fps 48kHz AAC/FLAC", "ax_encode_2go"},
 	{'q', "Quit Appliance TUI", "Return to shell / init supervisor", nullptr},
 }};
 
@@ -85,6 +85,8 @@ inline int spawn_child_on_core5(const char* prog, const std::vector<std::string>
 inline int run_encode_2go_prompt() {
 	std::string input_path;
 	std::string fps_choice;
+	std::string audio_choice;
+	std::string norm_choice;
 	std::string output_path;
 
 	std::cout << "Source movie path: " << std::flush;
@@ -93,17 +95,35 @@ inline int run_encode_2go_prompt() {
 		return 1;
 	}
 
-	std::cout << "Frame rate [60/30] (default 60): " << std::flush;
+	std::cout << "Frame rate [auto/60/30] (default auto): " << std::flush;
 	std::getline(std::cin, fps_choice);
-	const std::string fps_flag = (fps_choice == "30") ? "--30fps" : "--60fps";
+
+	std::string fps_flag = "--auto-fps";
+	if (fps_choice == "60") {
+		fps_flag = "--60fps";
+	} else if (fps_choice == "30") {
+		fps_flag = "--30fps";
+	}
+
+	std::cout << "Audio codec [aac/flac] (default aac): " << std::flush;
+	std::getline(std::cin, audio_choice);
+	const std::string audio_flag = (audio_choice == "flac" || audio_choice == "FLAC") ? "--flac" : "--aac";
+
+	std::cout << "Normalize dialogue loudness? [y/N]: " << std::flush;
+	std::getline(std::cin, norm_choice);
 
 	std::cout << "Output path (leave blank for default): " << std::flush;
 	std::getline(std::cin, output_path);
 
-	if (output_path.empty()) {
-		return flac_ax::video::run_encode_2go_process({fps_flag, input_path});
+	std::vector<std::string> args{fps_flag, audio_flag};
+	if (norm_choice == "y" || norm_choice == "Y") {
+		args.emplace_back("--normalize");
 	}
-	return flac_ax::video::run_encode_2go_process({fps_flag, input_path, output_path});
+	args.push_back(input_path);
+	if (!output_path.empty()) {
+		args.push_back(output_path);
+	}
+	return flac_ax::video::run_encode_2go_process(args);
 }
 
 inline int run_appliance_tui_loop() {
