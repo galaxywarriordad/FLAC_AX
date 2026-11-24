@@ -19,21 +19,17 @@ namespace flac_ax::video {
 inline constexpr int kCore5HousekeepingCpu = 5;
 
 inline bool pin_current_thread_to_core5() noexcept {
-	cpu_set_t mask;
-	CPU_ZERO(&mask);
-
 #if defined(FLAC_AX_HAS_AX_SDK) && FLAC_AX_HAS_AX_SDK
-	(void)sizeof(ax::topology);
-#endif
-
+	return ax::topology::pin_to_housekeeping_core5();
+#else
 	if (kCore5HousekeepingCpu < 0 || kCore5HousekeepingCpu >= CPU_SETSIZE) {
 		return false;
 	}
+	cpu_set_t mask;
+	CPU_ZERO(&mask);
 	CPU_SET(kCore5HousekeepingCpu, &mask);
-	if (sched_setaffinity(0, sizeof(mask), &mask) == 0) {
-		return true;
-	}
-	return false;
+	return sched_setaffinity(0, sizeof(mask), &mask) == 0;
+#endif
 }
 
 inline std::string resolve_encode_script_path() {
@@ -72,12 +68,7 @@ inline int run_encode_2go_process(const std::vector<std::string>& args) {
 	}
 
 	if (pid == 0) {
-		cpu_set_t child_mask;
-		CPU_ZERO(&child_mask);
-		if (kCore5HousekeepingCpu >= 0 && kCore5HousekeepingCpu < CPU_SETSIZE) {
-			CPU_SET(kCore5HousekeepingCpu, &child_mask);
-			(void)sched_setaffinity(0, sizeof(child_mask), &child_mask);
-		}
+		(void)pin_current_thread_to_core5();
 		execvp(script.c_str(), argv.data());
 		std::cerr << "[ax_encode_2go] execvp('" << script
 		          << "') failed: " << std::strerror(errno) << '\n';
