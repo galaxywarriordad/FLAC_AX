@@ -1,7 +1,7 @@
 # 🎛️ FLAC_AX Technical Architecture & Ecosystem Specification
 
 * **Project:** `FLAC_AX` — Deterministic Bit-Perfect Linux Audio Appliance & `[AX]` Audio/Visual Studio
-* **Ecosystem:** The Silicon Preservation Society (`Piccolo [AX]` / `ax-sdk v1_36_1` / `Generation-X-AX` / `piccolo-ax-desktop`)
+* **Ecosystem:** The Silicon Preservation Society (`Piccolo [AX]` / `ax-sdk v1_36_2` / `Generation-X-AX` / `piccolo-ax-desktop`)
 * **Target Baseline:** Intel Core i5-9600K (6C/6T, HT Disabled), 32 GB DDR4-3600, NVIDIA GTX 980 Ti (6 GB GM200), HiBy FC3 (ESS Sabre `ES9281AC Pro` / `ES9281PRO` — `2.0 Vrms` & `1.3 Vrms` revisions) & Multi-DAC UAC 2.0 Front-Ends + Nobsound Q10 / Wharfedale Diamond 9.0 & Grado SR325x, Akai MPK Mini MK3 (`MPKmini3`) USB-MIDI Controller
 
 ---
