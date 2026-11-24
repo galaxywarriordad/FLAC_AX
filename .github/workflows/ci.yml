@@ -12,24 +12,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout FLAC_AX
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config \
-            libflac++-dev libasound2-dev libsdl2-dev libgl1-mesa-dev
+            clang lld cmake ninja-build pkg-config \
+            libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev
 
-      - name: Configure & Build (Release)
+      - name: Configure & Build (Release, Clang)
         run: |
           cmake -S . -B build -G Ninja \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_BUILD_TYPE=Release \
             -DFLAC_AX_USE_AX_SDK=ON \
-            -DFLAC_AX_BUILD_AV_STUDIO=ON \
-            -DFLAC_AX_BUILD_VIDEO_UPSCALER=ON \
+            -DFLAC_AX_BUILD_STUDIO=ON \
+            -DFLAC_AX_BUILD_UPSCALER=ON \
             -DFLAC_AX_BUILD_APPLIANCE_TUI=ON \
-            -DFLAC_AX_ENABLE_SDL2_GL=ON \
+            -DFLAC_AX_BUILD_ENCODE_2GO=ON \
+            -DFLAC_AX_ENABLE_NATIVE_OPT=ON \
             -DFLAC_AX_ENABLE_LTO=OFF
           ninja -C build -j 4
 
