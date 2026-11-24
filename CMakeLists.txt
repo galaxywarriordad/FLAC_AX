@@ -20,16 +20,13 @@ if(FLAC_AX_USE_AX_SDK)
         message(STATUS "FLAC_AX: Using local ax-sdk at ${AX_SDK_LOCAL_DIR}")
         add_subdirectory("${AX_SDK_LOCAL_DIR}" "${CMAKE_BINARY_DIR}/_deps/ax_sdk-build" EXCLUDE_FROM_ALL)
     else()
-        message(STATUS "FLAC_AX: Fetching pinned ax-sdk v1.36.2 from GitHub")
+        message(STATUS "FLAC_AX: Fetching pinned ax-sdk v1_36_2 from GitHub")
         FetchContent_Declare(
             ax_sdk
             GIT_REPOSITORY https://github.com/galaxywarriordad/ax-sdk.git
-            GIT_TAG v1.36.2
+            GIT_TAG v1_36_2
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(ax_sdk)
     endif()
 endif()
-```[cite: 8]
-
-[FLAC_AX_CMakeLists_ax_sdk_pin.cmake](https://docs.google.com/document/d/1mV4DUD1qJuj99SBjO8SdZIj60is-R3g3J9hvN96lnGg/edit?usp=drivesdk&ouid=114366498032182118105)
