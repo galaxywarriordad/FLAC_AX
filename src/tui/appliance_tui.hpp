@@ -26,7 +26,7 @@ inline constexpr std::array<ApplianceEntry, 5> kApplianceEntries{{
 	{'1', "FLAC / DoP Player", "Bit-perfect ESS Sabre audio (Core 0 SCHED_FIFO 80)", "flac_ax"},
 	{'2', "AX Audio/Visual Studio", "MPK Mini MK3 + AVX2 Synth + GL HUD", "ax_av_studio"},
 	{'3', "DVD / HDMI Upscaler", "720p / 1080p / 2K single-stream scaler", "ax_video_upscaler"},
-	{'4', "Encode 640x480 (G350)", "Core 5 QSV + GTX 980 Ti -> 640x480 30fps 48kHz AAC", "ax_encode_2go"},
+	{'4', "Encode 640x480 (G350)", "Core 5 QSV + GTX 980 Ti -> 640x480 60fps/30fps 48kHz AAC", "ax_encode_2go"},
 	{'q', "Quit Appliance TUI", "Return to shell / init supervisor", nullptr},
 }};
 
@@ -84,6 +84,7 @@ inline int spawn_child_on_core5(const char* prog, const std::vector<std::string>
 
 inline int run_encode_2go_prompt() {
 	std::string input_path;
+	std::string fps_choice;
 	std::string output_path;
 
 	std::cout << "Source movie path: " << std::flush;
@@ -92,13 +93,17 @@ inline int run_encode_2go_prompt() {
 		return 1;
 	}
 
-	std::cout << "Output path (leave blank for <source>_g350_640x480.mp4): " << std::flush;
+	std::cout << "Frame rate [60/30] (default 60): " << std::flush;
+	std::getline(std::cin, fps_choice);
+	const std::string fps_flag = (fps_choice == "30") ? "--30fps" : "--60fps";
+
+	std::cout << "Output path (leave blank for default): " << std::flush;
 	std::getline(std::cin, output_path);
 
 	if (output_path.empty()) {
-		return flac_ax::video::run_encode_2go_process({input_path});
+		return flac_ax::video::run_encode_2go_process({fps_flag, input_path});
 	}
-	return flac_ax::video::run_encode_2go_process({input_path, output_path});
+	return flac_ax::video::run_encode_2go_process({fps_flag, input_path, output_path});
 }
 
 inline int run_appliance_tui_loop() {
