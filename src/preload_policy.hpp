@@ -9,6 +9,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <string>
@@ -23,6 +24,18 @@ enum class PreloadMode {
     Window3Files, // ~8 GiB RAM: preload up to 3 files at a time
     WholeAlbum    // >= 16 GiB RAM: preload whole album into RAM
 };
+
+inline constexpr const char* ToString(PreloadMode mode) noexcept {
+    switch (mode) {
+        case PreloadMode::WholeAlbum:
+            return "WholeAlbum";
+        case PreloadMode::Window3Files:
+            return "Window3Files";
+        case PreloadMode::SingleFile:
+        default:
+            return "SingleFile";
+    }
+}
 
 struct PreloadPolicy {
     PreloadMode mode{PreloadMode::SingleFile};
@@ -176,6 +189,10 @@ public:
             }
         }
         return nullptr;
+    }
+
+    const Entry* Find(const std::filesystem::path& path) const {
+        return Find(path.string());
     }
 
     std::size_t CachedFileCount() const noexcept { return entries_.size(); }
