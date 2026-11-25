@@ -220,6 +220,4 @@ if(FLAC_AX_BUILD_CLAP_HOST AND UNIX AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/
         message(STATUS "FLAC_AX: clap/clap.h not found; skipping ax_clap_host")
     endif()
 endif()
-```[cite: 27, 28]
 
-Commit both updates to `main` and re-run **Build Release Artifacts** (`build-release.yml`) to verify `build-windows` alongside `build-linux`[cite: 24, 25].
