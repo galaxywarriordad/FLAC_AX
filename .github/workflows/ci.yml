@@ -19,7 +19,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang lld cmake ninja-build pkg-config \
-            libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev
+            libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev \
+            liblilv-dev lv2-dev
 
       - name: Configure & Build (Release, Clang)
         run: |
@@ -32,6 +33,8 @@ jobs:
             -DFLAC_AX_BUILD_UPSCALER=ON \
             -DFLAC_AX_BUILD_APPLIANCE_TUI=ON \
             -DFLAC_AX_BUILD_ENCODE_2GO=ON \
+            -DFLAC_AX_BUILD_LV2_HOST=ON \
+            -DFLAC_AX_BUILD_CLAP_HOST=ON \
             -DFLAC_AX_ENABLE_NATIVE_OPT=ON \
             -DFLAC_AX_ENABLE_LTO=OFF
           ninja -C build -j 4
@@ -42,3 +45,5 @@ jobs:
           test -x build/ax_av_studio
           test -x build/ax_video_upscaler
           test -x build/ax_appliance_tui
+          if [ -e build/ax_lv2_host ]; then test -x build/ax_lv2_host; fi
+          if [ -e build/ax_clap_host ]; then test -x build/ax_clap_host; fi
