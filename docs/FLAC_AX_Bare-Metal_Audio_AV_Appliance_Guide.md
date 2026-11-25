@@ -1,38 +1,36 @@
 # 🎛️ Piccolo \[AX\] & FLAC\_AX — Complete Bare-Metal Audio, AV & Hardware Master Guide (UK)
 
-**Target System:** Bare-Metal Audio, Realtime Synth (`2.00 ms`) & Retro/DVD AV Appliance  
-**Reference `[AX]` Hardware Stack:** HiBy FC3 (`VID 0x32BB`, ESS Sabre `ES9281AC Pro`) \+ Nobsound Q10 Class-D Stereo Amp \+ Wharfedale Diamond 9.0 Speakers & Grado SR325x Open-Back Headphones  
-**Runtime Platform:** Real-Time Linux (`6.12-rt` / `Piccolo [AX]`) & Desktop Linux (`Ubuntu/Kubuntu 24.04+`) \+ Windows 10/11 Fallback  
-**Total System Cost:** **\~£45 – £554** *(Reference Rig: **\~£165 – £188** Speakers / **\~£464 – £487** Complete Speaker \+ Grado Rig; End-to-end latency: **1.5 – 3.0 ms**)*
+**Target System:** Bare-Metal Audio, Realtime Synth (`2.00 ms`), CLAP/LV2 Plugin Hosting & Retro/DVD AV Appliance **Reference `[AX]` Hardware Stack:** HiBy FC3 (`VID 0x32BB`, ESS Sabre `ES9281AC Pro`) \+ Nobsound Q10 Class-D Stereo Amp \+ Wharfedale Diamond 9.0 Speakers & Grado SR325x Open-Back Headphones **Runtime Platform:** Real-Time Linux (`6.12-rt` / `Piccolo [AX]`) & Desktop Linux (`Ubuntu/Kubuntu 24.04+`) \+ Windows 10/11 Build & Fallback **Total System Cost:** **\~£45 – £554** *(Reference Rig: **\~£165 – £188** Speakers / **\~£464 – £487** Complete Speaker \+ Grado Rig; End-to-end latency: **1.5 – 3.0 ms**)*
 
-Pairing **`FLAC_AX`** on real-time Linux (`6.12-rt` / `Piccolo [AX]`) with a modular **£29–£35 reference USB-C DAC** (**HiBy FC3** or **TRN Black Pearl**), a compact **Nobsound Class-D stereo amplifier**, and **nearfield British hi-fi speakers** or **open-back headphones/IEMs** transforms an ordinary `x86_64` PC into a deterministic, sub-2 ms bare-metal audio appliance—delivering bit-perfect 32-bit PCM/DSD playback, a `2.00 ms` hardware-feel synth workstation, and sample-clock-locked retro/DVD upscaling.
+Pairing **FLAC\_AX** on real-time Linux (`6.12-rt` / `Piccolo [AX]`) with a modular **£29–£35 reference USB-C DAC** (**HiBy FC3** or **TRN Black Pearl**), a compact **Nobsound Class-D stereo amplifier**, and **nearfield British hi-fi speakers** or **open-back headphones/IEMs** transforms an ordinary `x86_64` PC into a deterministic, sub-2 ms bare-metal audio appliance—delivering bit-perfect 32-bit PCM/DSD playback, tracker module playback, CLAP/LV2 plugin hosting, a `2.00 ms` hardware-feel synth workstation, and sample-clock-locked retro/DVD upscaling.
 
 ---
 
-## 🎯 Section 1: The Modular `FLAC_AX` Architecture
+## 🎯 Section 1: The Modular FLAC\_AX Architecture
 
 ### 🚫 The Modern Desktop Audio Trap
 
 Standard desktop operating systems (Windows 10/11 or stock Linux running PipeWire/PulseAudio) funnel audio through shared software mixers that silently resample streams, apply reduced-precision digital volume attenuation, and introduce `10` to `150+ ms` of buffer and spatial-DSP lag. Meanwhile, built-in motherboard audio chips sit millimetres from GPU VRMs and high-speed PCIe lanes, picking up coil whine, ground noise, and shared USB/SSD interrupt stutters.
 
-### ⚡ The Modular `FLAC_AX` Breakthrough
+### ⚡ The Modular FLAC\_AX Breakthrough
 
 Stripping away the OS audio server and active speaker DSP puts **75% to 85% of your budget** directly into DAC silicon, clean current amplification, and acoustic transducers:
 
-1. **The Software Engine (`FLAC_AX` on Linux `6.12-rt` / `Piccolo [AX]`):** Runs a zero-allocation C++20 real-time engine across a strict `2:3:1` CPU core topology. Core 5 (`RamFilePreloader`) decodes and locks entire lossless FLAC albums (up to `32-bit/384kHz`) or native `DSD64/DSD128` masters into physical RAM (`mlockall`) before playback begins—allowing your SSD bus to go completely silent. Core 0 (`SCHED_FIFO`, Priority `80`, `isolcpus` / `nohz_full` / `rcu_nocbs`) streams bit-exact `S32_LE` or `DoP` frames directly to ALSA node `hw:CARD=FC3,DEV=0` (or `hw:CARD=BLACKPEARL,DEV=0`) at **1.5–2.00 ms** latency.  
-2. **The Digital Heart (HiBy FC3 `£29.67–£35` or TRN Black Pearl `£29.18`):** Thumb-sized UAC 2.0 USB-C DACs delivering a full **`2.0 Vrms`** (`4.0 Vrms` balanced on Black Pearl) line-level output with `+130 dB` SNR, physical hardware volume buttons, detachable USB-C umbilicals, and zero external power bricks—outclassing the UK-throttled `0.5 Vrms` Apple dongle by `14×` to `40×` in power.  
-3. **The Analog Muscle (Compact `TI TPA3116` Class-D Stereo Amp — Nobsound Q10 / NS-01G Pro, £21–£35):** Because `FLAC_AX` performs bit-perfect 32-bit volume scaling ahead of the DAC, your amplifier needs zero digital inputs, Bluetooth radios, or tone-control DSP chips—acting purely as a `<1 ms` analog current booster powered by a quiet, regulated `19V–20V` laptop PSU (`£0–£12`).  
-4. **The Acoustic Payoff (Passive Nearfield Speakers £99–£149/pair & Wired Headphones/IEMs £16–£299):** With zero spend wasted on bloated multi-hundred-pound integrated amps or wireless modules, your budget goes straight into genuine British nearfield standmounts (**Wharfedale Diamond 9.0** at £99 up to **Wharfedale Diamond 220** at £149) and flagship open-back headphones (**Grado SR325x** at £299) driven straight off the HiBy FC3 at sub-2 ms latency.
+1. **The Software Engine (`FLAC_AX` on Linux `6.12-rt` / `Piccolo [AX]`):** Runs a zero-allocation C++20 real-time engine across a strict `2:3:1` CPU core topology. Core `5` (`RamFilePreloader`) decodes and locks entire lossless FLAC albums (up to `32-bit/384kHz`), native `DSD64/DSD128` masters, or tracker modules (`.mod`/`.xm`/`.s3m`/`.it` via `libopenmpt`) into physical RAM (`mlockall`) before playback begins—allowing your SSD bus to go completely silent. Core `0` (`SCHED_FIFO`, Priority `80`, `isolcpus` / `nohz_full` / `rcu_nocbs`) streams bit-exact `S32_LE` or `DoP` frames directly to ALSA node `hw:CARD=FC3,DEV=0` (or `hw:CARD=BLACKPEARL,DEV=0`) at **1.5–2.00 ms** latency.  
+2. **Canonical Ring Transport & RAII DAC Arbitration:** All audio targets use the unified `StereoSampleRing<SampleT>` (`StereoFrameRing32` and `StereoFloatRing` with `FloatSampleToS32` / `ConvertStereoFloatToS32`) in `src/audio/ax_stereo_ring.hpp` and acquire `/run/lock/ax-dac.lock` via `ScopedDacLock` (`src/audio/ax_dac_lock.hpp`), unlocking and closing the open descriptor safely without unlinking the shared lock path on exit.  
+3. **The Digital Heart (HiBy FC3 `£29.67–£35` or TRN Black Pearl `£29.18`):** Thumb-sized UAC 2.0 USB-C DACs delivering a full **`2.0 Vrms`** (`4.0 Vrms` balanced on Black Pearl) line-level output with `+130 dB` SNR, physical hardware volume buttons, detachable USB-C umbilicals, and zero external power bricks—outclassing the UK-throttled `0.5 Vrms` Apple dongle by `14×` to `40×` in power.  
+4. **The Analog Muscle (Compact `TI TPA3116` Class-D Stereo Amp — Nobsound Q10 / NS-01G Pro, £21–£35):** Because `FLAC_AX` performs bit-perfect 32-bit volume scaling ahead of the DAC, your amplifier needs zero digital inputs, Bluetooth radios, or tone-control DSP chips—acting purely as a `<1 ms` analog current booster powered by a quiet, regulated `19V–20V` laptop PSU (`£0–£12`).  
+5. **The Acoustic Payoff (Passive Nearfield Speakers £99–£149/pair & Wired Headphones/IEMs £16–£299):** With zero spend wasted on bloated multi-hundred-pound integrated amps or wireless modules, your budget goes straight into genuine British nearfield standmounts (**Wharfedale Diamond 9.0** at £99 up to **Wharfedale Diamond 220** at £149) and flagship open-back headphones (**Grado SR325x** at £299) driven straight off the HiBy FC3 at sub-2 ms latency.
 
-### 🎹 Three Real-Time Appliances in One Rig
+### 🎮 Real-Time Appliances & Hosts in One Rig
 
-| Appliance Mode | Binary / Engine | Key Capability & Hardware Clock Lock |
+| Appliance / Host Mode | Binary / Engine | Key Capability & Hardware Clock Lock |
 | :---- | :---- | :---- |
-| **Bit-Perfect Hi-Fi Player** | `flac_ax` | RAM-locked (`mlockall`) lossless FLAC (`32-bit/384kHz`) and native `DoP` DSD64/128 playback directly to `hw:CARD=FC3` / `BLACKPEARL` at `1.5–2.00 ms`. |
+| **Bit-Perfect Hi-Fi & Tracker Player** | `flac_ax` | RAM-locked (`mlockall`) lossless FLAC (`32-bit/384kHz`), native `DoP` DSD64/128, and `libopenmpt` tracker modules directly to `hw:CARD=FC3` / `BLACKPEARL` at `1.5–2.00 ms`. |
 | **Hardware-Feel Synthesizer** | `ax_av_studio` | 16-voice polyphonic subtractive synth, 8-voice percussion, stereo Schroeder reverb, and ping-pong tape echo at `96 samples` (`2.00 ms @ 48 kHz`) with 60 FPS OpenGL oscilloscope & 64-band FFT. |
+| **CLAP & LV2 Audio Plugin Hosts** | `ax_clap_host` / `ax_lv2_host` | Loads CLAP (C ABI) and LV2 (`lilv`) plugins on isolated DSP cores (`0x1C`), pushing into `StereoFloatRing` and draining via a Core `0` (`SCHED_FIFO 80`) `AlsaStereoSink` (`S32_LE`, with `--device` / `--no-alsa` support). |
 | **Zero-Drift Retro & DVD Upscaler** | `ax_video_upscaler` | USB 3.0 HDMI capture (`240p` passthrough / `480i/576i` Bob deinterlace via MacroSilicon MS2130S) and OpenGL 3.3 `Y`/`UV` shader DVD upscaling (`720p/1080p/2K`), sample-clock-locked via `AudioMasterPtsSync`. |
-| **Core 5 Espresso Appliance TUI** | `ax_appliance_tui` | Zero-dependency 24-bit ANSI Coffee/Espresso launcher pinned to Core 5 (`0x20`) with live `/run/lock/ax-dac.lock` and RAM telemetry. |
-
+| **Core 5 Espresso Appliance TUI** | `ax_appliance_tui` | Zero-dependency 24-bit ANSI Coffee/Espresso launcher pinned to Core `5` (`0x20`) with live `/run/lock/ax-dac.lock` and RAM telemetry. |
 
 ### 📊 System Architecture Comparison
 
@@ -52,50 +50,50 @@ Desktop Class-D speaker amplifiers are calibrated around a **2.0 Vrms** single-e
 
 ```
 +======================================================================================+
-|    PICCOLO [AX] (6.12-RT TORAM) -> HIBY FC3 / TRN BLACK PEARL -> NOBSOUND Q10 AMP    |
+| PICCOLO [AX] (6.12-RT TORAM) -> HIBY FC3 / TRN BLACK PEARL -> NOBSOUND Q10 AMP |
 +======================================================================================+
 
 [ CORE 5 (0x20): Non-RT Background (storage_aux) ]
-  ├── RamFilePreloader (Locks FLAC / .dsf / .dff into RAM; storage bus goes idle)
-  ├── MpkMini3Listener (Lock-free SPSC MIDI queue -> Cores 2–4 Synth/FX DSP)
-  └── Intel iHD VA-API / MS2130S Capture (Zero-copy dma_buf -> Core 1 GPU Presentation)
-         |
-         v  (Lock-Free SPSC Ring Buffer / /run/lock/ax-dac.lock Arbitration)
+ ├── RamFilePreloader (Locks FLAC / .dsf / .dff / tracker modules into RAM)
+ ├── MpkMini3Listener (Lock-free SPSC MIDI queue -> Cores 2–4 Synth/FX DSP)
+ └── Intel iHD VA-API / MS2130S Capture (Zero-copy dma_buf -> Core 1 GPU Presentation)
+  |
+  v (Canonical StereoSampleRing + ScopedDacLock /run/lock/ax-dac.lock Arbitration)
 [ CORE 0 (0x01): isolcpus + SCHED_FIFO Prio 80 + USB xHCI IRQ Affinity ]
-  └── Direct ALSA hw:CARD=FC3,DEV=0 (or BLACKPEARL) (Bypasses PipeWire/PulseAudio/dmix)
-         |
-         |  USB 2.0 High-Speed (Raw S32_LE PCM up to 384 kHz or DoP DSD128/DSD256)
-         v
+ └── Direct ALSA hw:CARD=FC3,DEV=0 (or BLACKPEARL) / AlsaStereoSink (Bypasses PipeWire/PulseAudio/dmix)
+  |
+  | USB 2.0 High-Speed (Raw S32_LE PCM up to 384 kHz or DoP DSD128/DSD256)
+  v
 +-------------------------------------------------------------------+
-|  HIBY FC3 (ES9281AC PRO)          OR   TRN BLACK PEARL (2x CS43131)|
-|  [Single-Die USB PHY + QUAD DAC]       [CB5100 + Dual-Mono DACs]   |
-|  [Optional 0.69" OLED Telemetry]       [On-Board 8/10-Band PEQ]    |
-|  [2.0 Vrms SE / 112 mW @ 32 Ohm]       [2.0 Vrms SE / 4.0 Vrms Bal]|
+| HIBY FC3 (ES9281AC PRO) OR TRN BLACK PEARL (2x CS43131)          |
+| [Single-Die USB PHY + QUAD DAC] [CB5100 + Dual-Mono DACs]        |
+| [Optional 0.69" OLED Telemetry] [On-Board 8/10-Band PEQ]          |
+| [2.0 Vrms SE / 112 mW @ 32 Ohm] [2.0 Vrms SE / 4.0 Vrms Bal]     |
 +-------------------------------------------------------------------+
-         |                                           |
-         | (3.5 mm -> RCA / AUX Interconnect)        | (Direct 3.5 mm / 4.4 mm Out)
-         v                                           v
-[ NOBSOUND Q10 CLASS-D AMP ] -> [ DIAMOND 9.0 ]    [ GRADO SR325x / IEMs ]
+  |                               |
+  | (3.5 mm -> RCA / AUX Interconnect) | (Direct 3.5 mm / 4.4 mm Out)
+  v                               v
+[ NOBSOUND Q10 CLASS-D AMP ] -> [ DIAMOND 9.0 ] [ GRADO SR325x / IEMs ]
 ```
 
 ### 2.1 Silicon Architecture & Circuit Topology (Sub-£50 Contenders)
 
 * 🎛️ **HiBy FC3 (`£29.67` Standard / `£35` OLED Display — `VID 0x32BB` Reference Target):** Consolidates USB 2.0 PHY, 32-bit HyperStream II QUAD DAC, and analogue output stage onto a **single piece of ESS Sabre `ES9281AC Pro` silicon**—eliminating external USB-to-I²S bridges and inter-chip jitter domains. Outputs `2.0 Vrms` (`112 mW @ 32 Ω`) SE with `< 1.0 Ω` output impedance, `+130 dB` SNR, native `32-bit/384 kHz` PCM, DoP DSD128, MQA rendering, physical volume buttons, and detachable USB-C cable.  
-* 🦪 **TRN Black Pearl (`£29.18` — Dual-Mono Value & Hardware PEQ):** Deploys **two separate Cirrus Logic `CS43131` DACs** in a true dual-mono configuration behind a `CB5100` USB bridge—dedicating one MasterHIFI converter per stereo channel. Delivers `2.0 Vrms` (`125 mW @ 32 Ω`) from 3.5mm SE and `4.0 Vrms` (`320 mW @ 32 Ω`) from 4.4mm Pentaconn balanced. Crucially integrates an **8- to 10-band hardware parametric EQ (PEQ)** stored directly in on-board flash (configured via Walk Play web/app), physical volume/playback buttons, a detachable USB-C cable, and a **TRRS headset microphone ADC**.  
+* 🐙 **TRN Black Pearl (`£29.18` — Dual-Mono Value & Hardware PEQ):** Deploys **two separate Cirrus Logic `CS43131` DACs** in a true dual-mono configuration behind a `CB5100` USB bridge—dedicating one MasterHIFI converter per stereo channel. Delivers `2.0 Vrms` (`125 mW @ 32 Ω`) from 3.5mm SE and `4.0 Vrms` (`320 mW @ 32 Ω`) from 4.4mm Pentaconn balanced. Crucially integrates an **8- to 10-band hardware parametric EQ (PEQ)** stored directly in on-board flash (configured via Walk Play web/app), physical volume/playback buttons, a detachable USB-C cable, and a **TRRS headset microphone ADC**.  
 * ⚡ **FiiO KA11 (`£29.19` — Single-Ended Brute-Force Powerhouse):** Pairs a Cirrus Logic `CS43131` with an independent **`SGM8262` high-current operational amplifier**, swinging **`2.5 Vrms` (`200 mW @ 32 Ω`, `245 mW @ 16 Ω`)** out of a standard 3.5mm jack with `< 0.5 Ω` output impedance. Trade-offs: fixed braided copper lead, no physical volume buttons, higher thermal draw, and `+2 dB` hotter line output requiring lower `--volume` gain (`0.70–0.75`) into TPA3116 speaker amps.  
 * 💎 **Moondrop Dawn Pro 2 (`£49.79` — Micro-Linearity IEM Specialist):** Steps up to **dual standalone Cirrus Logic `CS43198` DACs** plus external dual-channel op-amps (`THD+N < 0.00014%`, `132 dB` dynamic range), `2.0 Vrms` (`~60 mW @ 32 Ω`) SE / `4.0 Vrms` (`~120 mW @ 32 Ω`) balanced, 100-step hardware volume control, and 8-band hardware PEQ. Ideal for ultra-sensitive IEMs, though its £20 premium yields diminishing returns on high-impedance (`10–47 kΩ`) Class-D speaker inputs.
 
 ### 2.2 Complete USB Front-End Comparison Matrix
 
-| Specification | Generic `UC02` Clone (`VID 0x0000`) | 🍎 Apple Dongle (UK `A2155`) | 🎛️ HiBy FC3 (`VID 0x32BB`) | ⚡ FiiO KA11 | 🦪 TRN Black Pearl | 💎 Moondrop Dawn Pro 2 | 🎙️ Neat Bumblebee (Used 2-in-1) |
+| Specification | Generic `UC02` Clone (`VID 0x0000`) | 🍎 Apple Dongle (UK `A2155`) | 🎛️ HiBy FC3 (`VID 0x32BB`) | ⚡ FiiO KA11 | 🐙 TRN Black Pearl | 💎 Moondrop Dawn Pro 2 | 🎙️ Neat Bumblebee (Used 2-in-1) |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| **UK Street Price** | \~£3 – £7 (Avoid) | **\~£9.00** (New) | **£29.67** (`£35` OLED) | **£29.19** (New) | **£29.18** (New) | **£49.79** (Pre-Order) | **\~£25 – £50** (Used) |
+| **UK Street Price** | `~£3 – £7` (Avoid) | **`~£9.00`** (New) | **`£29.67`** (`£35` OLED) | **`£29.19`** (New) | **`£29.18`** (New) | **`£49.79`** (Pre-Order) | **`~£25 – £50`** (Used) |
 | **DAC / Amp Silicon** | Unprogrammed C-Media/Jieli | `CS46L06` Single-Die | `ES9281AC Pro` Single-Die | `CS43131` \+ `SGM8262` | **Dual `CS43131` \+ `CB5100`** | Dual `CS43198` \+ Ext. Amp | `3S SSS1629` \+ 24/96 Codec |
-| **Max Output (3.5mm SE)** | \~0.4–0.8 Vrms | 0.5 Vrms (EU Cap) | **2.0 Vrms (112 mW)** | **2.5 Vrms (200 mW)** | **2.0 Vrms (125 mW)** | 2.0 Vrms (\~60 mW) | \~1.26 Vrms (100 mW @ 16Ω) |
-| **Max Output (4.4mm Bal)** | None | None | None | None | **4.0 Vrms (320 mW)** | 4.0 Vrms (\~120 mW) | None |
-| **Power Gain vs. UK Apple** | \~1× | 1× (Baseline) | 14× (3.5mm) | 25× (3.5mm) | 15.6× (SE) / **40× (Bal)** | 7.5× (SE) / 15× (Bal) | \~6.3× |
+| **Max Output (3.5mm SE)** | `~0.4–0.8 Vrms` | `0.5 Vrms` (EU Cap) | **2.0 Vrms (112 mW)** | **2.5 Vrms (200 mW)** | **2.0 Vrms (125 mW)** | `2.0 Vrms` (`~60 mW`) | `~1.26 Vrms` (`100 mW @ 16Ω`) |
+| **Max Output (4.4mm Bal)** | None | None | None | None | **4.0 Vrms (320 mW)** | `4.0 Vrms` (`~120 mW`) | None |
+| **Power Gain vs. UK Apple** | `~1×` | `1×` (Baseline) | `14×` (3.5mm) | `25×` (3.5mm) | `15.6×` (SE) / **40× (Bal)** | `7.5×` (SE) / `15×` (Bal) | `~6.3×` |
 | **PCM / DSD Ceiling** | 16-bit / 48 kHz | 24-bit / 48 kHz (No DSD) | 32-bit / 384 kHz, DSD128 | 32-bit / 384 kHz, DSD256 | **32-bit / 384 kHz, DSD256** | 32-bit / 384 kHz, DSD256 | 24-bit / 96 kHz (PCM only) |
-| **Dynamic Range / THD+N** | \~85 dB / 0.03% | \~113 dB / \<0.002% | **\+130 dB** / 0.0006% | **130 dB** / 0.00017% | **\>130 dB** / \<0.0002% | **132 dB** / \<0.00014% | 98 dB / 0.05% |
+| **Dynamic Range / THD+N** | `~85 dB` / `0.03%` | `~113 dB` / `<0.002%` | **\+130 dB** / `0.0006%` | **130 dB** / `0.00017%` | **\>130 dB** / `<0.0002%` | **132 dB** / `<0.00014%` | `98 dB` / `0.05%` |
 | **On-Board Hardware EQ** | None | None | None | None (Filters only) | **Yes (8/10-band PEQ)** | Yes (8-band PEQ) | Analog EQ Switch |
 | **In-Line Mic ADC** | Yes (Noisy) | Yes | No | No | **Yes (TRRS Mic ADC)** | No | **Yes (Cardioid Condenser)** |
 | **Interconnect & Controls** | Fixed cable | Fixed TPE cable | Detachable \+ Vol Buttons | Fixed braided copper | **Detachable \+ Vol Buttons** | Detachable \+ 100-Step Vol | Detachable USB \+ Knobs |
@@ -120,7 +118,7 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 
 * 🏆 **Reference Desktop Amp — Nobsound Q10 (\~£30–£35, `TI TPA3116` Stereo):** Compact desktop Class-D stereo amplifier with clean `2.0 Vrms`\-compatible line inputs, tactile volume control, and gold-plated banana-plug speaker binding posts—delivering transparent `<1 ms` current amplification for the **Wharfedale Diamond 9.0** without wasting budget on unused Bluetooth/DSP circuits.  
 * 💸 **Entry Budget Amp — Nobsound NS-01G Pro (\~£21, `TI TPA3116` Stereo):** Ultra-compact (`78 × 70 × 38 mm`) `TPA3116` stereo mini-amp with 3.5 mm `AUX` line-in and banana-plug speaker terminals—ideal for ultra-tight desk footprints. *(Always verify you are ordering a 2-channel stereo model, not a mono subwoofer amp like the Douk NS-03G.)*  
-* 🔌 **Zero-Waste PSU Strategy (`£0 – £18`):** Both units accept `12V–24V DC` (`5.5 × 2.5 mm` centre-positive). Repurpose a **genuine 19V/4.74A (90W) or 20V/4.5A (90W) Dell, Lenovo, or HP laptop power brick** (`£0` from a spare drawer or `~£12` used with barrel adapter), or use a regulated **Mean Well `GST90A19` (`19V`) / `24V/4A` PSU (`~£18`)**—staying safely below the TPA3116's 26V ceiling and 25V smoothing capacitors.
+* 🔌 **Zero-Waste PSU Strategy (£0 – £18):** Both units accept `12V–24V DC` (`5.5 × 2.5 mm` centre-positive). Repurpose a **genuine 19V/4.74A (90W) or 20V/4.5A (90W) Dell, Lenovo, or HP laptop power brick** (`£0` from a spare drawer or `~£12` used with barrel adapter), or use a regulated **Mean Well `GST90A19` (`19V`) / `24V/4A` PSU (`~£18`)**—staying safely below the TPA3116's 26V ceiling and 25V smoothing capacitors.
 
 ### 3.2 Power Supply Buying Rules
 
@@ -138,10 +136,10 @@ Capping the passive loudspeaker lineup at **£149** keeps the focus on compact B
 
 | Tier & Model | UK Price | Impedance / Sensitivity | Freq. Range & Size (`H×W×D`) | Port & Acoustic Design | Best Piccolo \[AX\] Pairing & Character |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| **1\. JBL Control One** *(Entry)* | **\~£99** | `4–8 Ω` / `89 dB` | `80 Hz – 20 kHz`<br>`228 × 155 × 139 mm` | Front / Compact Studio (+ desk/wall brackets) | **Nobsound NS-01G Pro or Q10 (`19V`).** High `89 dB` efficiency; retro game SFX and synth leads jump out cleanly at low volume. |
-| **2\. Wharfedale Diamond 9.0** *(Reference)* | **\~£99** | `6 Ω` / `86 dB` | `60 Hz – 24 kHz`<br>`236 × 145 × 165 mm` | **Front-firing bass reflex** | **Nobsound Q10 \+ HiBy FC3 (`[AX]` Reference).** Warm, smooth Kevlar midrange; front port allows placement flush against a shallow desk wall without bass boom. |
-| **3\. Q Acoustics 3010i** *(Higher)* | **\~£119** | `6 Ω` / `86 dB` | `65 Hz – 30 kHz`<br>`253 × 150 × 252 mm` | Rear port (foam bungs included) | **Nobsound Q10 (`19V–24V`).** Narrow `150 mm` front baffle projects a wide, fatigue-free 3D desktop stereo stage. |
-| **4\. Wharfedale Diamond 220** *(Ceiling)* | **\~£149** | `8 Ω` (`4.1 Ω` min) / `86 dB` | `56 Hz – 20 kHz`<br>`315 × 174 × 255 mm` | **Downward-firing slot port** | **Nobsound Q10 (`24V` PSU).** Vents through a calibrated plinth gap to eliminate rear-wall boom; true studio-grade acoustic neutrality. |
+| **1\. JBL Control One** *(Entry)* | **\~£99** | `4–8 Ω` / `89 dB` | `80 Hz – 20 kHz` `228 × 155 × 139 mm` | Front / Compact Studio (+ desk/wall brackets) | **Nobsound NS-01G Pro or Q10 (`19V`).** High `89 dB` efficiency; retro game SFX and synth leads jump out cleanly at low volume. |
+| **2\. Wharfedale Diamond 9.0** *(Reference)* | **\~£99** | `6 Ω` / `86 dB` | `60 Hz – 24 kHz` `236 × 145 × 165 mm` | **Front-firing bass reflex** | **Nobsound Q10 \+ HiBy FC3 (`[AX]` Reference).** Warm, smooth Kevlar midrange; front port allows placement flush against a shallow desk wall without bass boom. |
+| **3\. Q Acoustics 3010i** *(Higher)* | **\~£119** | `6 Ω` / `86 dB` | `65 Hz – 30 kHz` `253 × 150 × 252 mm` | Rear port (foam bungs included) | **Nobsound Q10 (`19V–24V`).** Narrow `150 mm` front baffle projects a wide, fatigue-free 3D desktop stereo stage. |
+| **4\. Wharfedale Diamond 220** *(Ceiling)* | **\~£149** | `8 Ω` (`4.1 Ω` min) / `86 dB` | `56 Hz – 20 kHz` `315 × 174 × 255 mm` | **Downward-firing slot port** | **Nobsound Q10 (`24V` PSU).** Vents through a calibrated plinth gap to eliminate rear-wall boom; true studio-grade acoustic neutrality. |
 
 ---
 
@@ -156,7 +154,7 @@ Capping the passive loudspeaker lineup at **£149** keeps the focus on compact B
 | **Beyerdynamic DJ 300 Pro X** | **\~£85** | Closed On/Over-Ear (`315 g`) | `48 Ω` / `109 dB` | ★★★★☆ | ★★★★☆ | ★★★★★ | Visceral `5 Hz` sub-bass extension and `20 dB` passive isolation. |
 | **Austrian Audio Hi-X15 / Hi-X20** | **\~£89 / £129** | Closed Over-Ear (`255 g`) | `25 Ω` / `113 dB/V` | ★★★★☆ | **★★★★★** | ★★★★☆ | Fast, snappy closed-back monitoring; blocks room noise & supports TRRS boom mic on TRN Black Pearl. |
 | **Sennheiser HD 560S** | **\~£99 – £139** | Open Over-Ear (`240 g`) | `120 Ω` / `110 dB/V` | **★★★★★** | **★★★★★** | ★★★★☆ | Angled transducers, flat studio accuracy & wide stage; HiBy FC3's `2.0 Vrms` drives `120 Ω` cleanly (`--volume 0.65–0.80`). |
-| **Sennheiser HD 569** | **\~£119 – £149** | Closed Over-Ear | `23 Ω` / `115 dB/V` | ★★★★☆ | **★★★★★** | **★★★★★** | Deep sub-bass extension, plush velour comfort, and inline mic compatibility with TRN Black Pearl. |
+| **Sennheiser HD 569** | **\~£119 – £149** | Closed Over-Ear | `23 Ω` / `115 dB/V` | ★★★★☆ | **★★★★★** | ★★★★★ | Deep sub-bass extension, plush velour comfort, and inline mic compatibility with TRN Black Pearl. |
 | **Grado SR325x** *(Reference Head-Fi)* | **£299** | Open On-Ear (Alloy, `280 g`) | `38 Ω` / `98–99.8 dB` | **★★★★★** | ★★★★☆ | ★★★☆☆ | **Reference Open-Back Partner.** CNC-machined aluminium cups; explosive transient snap & flagship DSD detail straight out of HiBy FC3 (`--volume 0.50–0.65`). |
 
 ### 5.2 In-Ear Monitors (IEMs — `-26 dB` Passive Isolation & 2-in-1 USB-C DSP Options)
@@ -181,9 +179,9 @@ Capping the passive loudspeaker lineup at **£149** keeps the focus on compact B
 3. **Rear-Wall Boundary Control:** Leave `15–25 cm` behind rear-ported speakers (**Q Acoustics 3010i**) or insert the included **foam port bungs**—or use the front-ported **Wharfedale Diamond 9.0** / downward-ported **Diamond 220**, which sit cleanly near a back wall without bass boom.  
 4. **Solving the Bare-Metal Room-EQ Paradox (TRN Black Pearl Hardware PEQ):** Because bare-metal `flac_ax` bypasses all host-side software DSP to preserve bit-exact `S32_LE`/DoP delivery, DACs without on-board DSP (like the HiBy FC3) rely strictly on physical placement. With the **TRN Black Pearl**, you can save subtractive parametric EQ directly into the DAC's on-board flash via a web browser (`-2.5` to `-4.0 dB` at `100–140 Hz`, `Q=2.0` for rear-wall boom; `-2.0` to `-3.0 dB` at `220–320 Hz`, `Q=2.5` for desk bounce; or a `+2 dB` `2.5–3.5 kHz` vocal lift for cinema)—retaining bit-perfect host transport with **zero software DSP latency**.
 
-### 6.2 Pre-Terminated HiFi Speaker Cable (`£6.45`)
+### 6.2 Pre-Terminated HiFi Speaker Cable (£6.45)
 
-Instead of stripping raw wire and crimping separate plugs, use a ready-terminated stereo speaker cable pair (**2pcs/1Pair HiFi RCA to 2 Banana Speaker Cable for Amplifier — `£6.45`**):
+Instead of stripping raw wire and crimping separate plugs, use a ready-terminated stereo speaker cable pair (**2pcs/1Pair HiFi RCA to 2 Banana Speaker Cable for Amplifier — £6.45**):
 
 * **High-Quality HiFi Audio Connection:** Delivers clear, distortion-free audio transmission between your amplifier and passive speakers with reliable signal transfer.  
 * **Compatible with Standard Speaker Systems:** Designed for seamless integration with standard home audio and mini Class-D amplifiers (verify connector polarity: match **Red `+` to Red `+`** and **Black `–` to Black `–`**).  
@@ -224,7 +222,7 @@ First, plug in your DAC and confirm its Vendor/Product IDs via `lsusb` (HiBy FC3
 
 Save to `/etc/udev/rules.d/99-ax-usb-dacs.rules` (installed automatically by `Piccolo-AX` when `BR2_PACKAGE_FLAC_AX_USB_DAC_RULES=y`):
 
-```udev
+```
 # /etc/udev/rules.d/99-ax-usb-dacs.rules
 # 1. Sound Subsystem: Bypass PulseAudio / PipeWire ACP & set audio permissions
 SUBSYSTEM=="sound", ATTRS{idVendor}=="32bb", ATTR{id}="FC3", ENV{PULSE_IGNORE}="1", ENV{ACP_IGNORE}="1", GROUP="audio", MODE="0660"
@@ -244,21 +242,22 @@ ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", MODE="0660", GROUP="aud
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
 ```
 
-&nbsp;
+ 
 
 Remove any deprecated `nrpacks=1` modprobe file on `6.12+` kernels and configure PAM real-time limits in `/etc/security/limits.d/99-flac-ax.conf`:
+
 ```sh
 sudo rm -f /etc/modprobe.d/hiby-fc3-ax.conf
 ```
 
-```conf
+```
 # /etc/security/limits.d/99-flac-ax.conf
-@audio   -  rtprio     95
-@audio   -  memlock    unlimited
-@audio   -  nice      -19
+@audio - rtprio 95
+@audio - memlock unlimited
+@audio - nice -19
 ```
 
-&nbsp;
+ 
 
 Apply and verify:
 
@@ -275,7 +274,7 @@ ls -l /dev/snd/pcmC*
 
 If PipeWire/WirePlumber is installed (`Ubuntu/Kubuntu` or `piccolo-ax-desktop`), create `/etc/wireplumber/wireplumber.conf.d/51-ignore-hiby-fc3.conf` *(skip on bare-metal Buildroot/Batocera)*:
 
-```hocon
+```
 # /etc/wireplumber/wireplumber.conf.d/51-ignore-hiby-fc3.conf
 monitor.alsa.rules = [
   {
@@ -293,14 +292,14 @@ monitor.alsa.rules = [
 ]
 ```
 
-&nbsp;
+ 
 
 Restart and verify WirePlumber no longer holds the device:
 
 ```sh
 systemctl --user restart wireplumber
-wpctl status          # HiBy FC3 must NOT appear under Audio Devices
-fuser -v /dev/snd/*   # Must return empty for the FC3 card node
+wpctl status # HiBy FC3 must NOT appear under Audio Devices
+fuser -v /dev/snd/* # Must return empty for the FC3 card node
 ```
 
 ### 8.3 Deterministic Core 0 Launcher & Switcher (`~/bin/ax-launch.sh`)
@@ -312,11 +311,11 @@ set -euo pipefail
 
 # Use systemd XDG_RUNTIME_DIR if available; otherwise create a group-shared dir in /tmp
 if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" ]]; then
-    RUNTIME_DIR="$XDG_RUNTIME_DIR"
+  RUNTIME_DIR="$XDG_RUNTIME_DIR"
 else
-    RUNTIME_DIR="/tmp/ax-runtime"
-    mkdir -p "$RUNTIME_DIR"
-    chmod 0770 "$RUNTIME_DIR" 2>/dev/null || true
+  RUNTIME_DIR="/tmp/ax-runtime"
+  mkdir -p "$RUNTIME_DIR"
+  chmod 0770 "$RUNTIME_DIR" 2>/dev/null || true
 fi
 
 PIDFILE="${RUNTIME_DIR}/ax-dac.pid"
@@ -328,84 +327,90 @@ VOL="${2:-0.80}"
 TARGET="${3:-}"
 
 usage() {
-    echo "Usage: $0 {music|synth|retro|dvd} [volume: 0.01-1.00] [album_dir_or_iso]" >&2
-    exit 1
+  echo "Usage: $0 {music|synth|retro|dvd|clap|lv2} [volume: 0.01-1.00] [target_path_or_uri]" >&2
+  exit 1
 }
 
 # 1. Validate arguments BEFORE tearing down any active audio engine
 case "$MODE" in
-    music|dvd)
-        [[ -z "$TARGET" || ! -e "$TARGET" ]] && { echo "Error: Missing or invalid target path for $MODE." >&2; usage; }
-        ;;
-    synth|retro)
-        ;;
-    *)
-        usage
-        ;;
+  music|dvd|clap|lv2)
+    [[ -z "$TARGET" || ( "$MODE" != "lv2" && ! -e "$TARGET" ) ]] && { echo "Error: Missing or invalid target for $MODE." >&2; usage; }
+    ;;
+  synth|retro)
+    ;;
+  *)
+    usage
+    ;;
 esac
 
 if ! awk -v v="$VOL" 'BEGIN { exit !(v > 0.0 && v <= 1.0) }'; then
-    echo "Error: Volume '$VOL' out of safe range (0.01 - 1.00)." >&2
-    exit 1
+  echo "Error: Volume '$VOL' out of safe range (0.01 - 1.00)." >&2
+  exit 1
 fi
 
 # 2. Verify DAC presence before proceeding
 if ! grep -q "\[$CARD_NAME" /proc/asound/cards 2>/dev/null; then
-    echo "Error: HiBy FC3 ($DEVICE) not detected in /proc/asound/cards." >&2
-    exit 1
+  echo "Error: HiBy FC3 ($DEVICE) not detected in /proc/asound/cards." >&2
+  exit 1
 fi
 
 # 3. Cleanly terminate previous engine and wait for ALSA PCM release
 if [[ -f "$PIDFILE" ]]; then
-    OLD_PID=$(cat "$PIDFILE" 2>/dev/null || true)
-    if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
-        kill -TERM "$OLD_PID" 2>/dev/null || true
-        for _ in {1..100}; do
-            kill -0 "$OLD_PID" 2>/dev/null || break
-            sleep 0.01
-        done
-        if kill -0 "$OLD_PID" 2>/dev/null; then
-            kill -KILL "$OLD_PID" 2>/dev/null || true
-        fi
+  OLD_PID=$(cat "$PIDFILE" 2>/dev/null || true)
+  if [[ -n "$OLD_PID" ]] && kill -0 "$OLD_PID" 2>/dev/null; then
+    kill -TERM "$OLD_PID" 2>/dev/null || true
+    for _ in {1..100}; do
+      kill -0 "$OLD_PID" 2>/dev/null || break
+      sleep 0.01
+    done
+    if kill -0 "$OLD_PID" 2>/dev/null; then
+      kill -KILL "$OLD_PID" 2>/dev/null || true
     fi
-    rm -f "$PIDFILE"
+  fi
+  rm -f "$PIDFILE"
 fi
 
 # Ensure kernel ALSA PCM subdevice is closed (avoids EBUSY on fast switch)
 CARD_NUM=$(awk -F'[][]' "/\[$CARD_NAME/ {print \$1}" /proc/asound/cards | tr -d ' ')
 if [[ -n "$CARD_NUM" && -f "/proc/asound/card${CARD_NUM}/pcm0p/sub0/status" ]]; then
-    for _ in {1..50}; do
-        grep -q "closed" "/proc/asound/card${CARD_NUM}/pcm0p/sub0/status" && break
-        sleep 0.01
-    done
+  for _ in {1..50}; do
+    grep -q "closed" "/proc/asound/card${CARD_NUM}/pcm0p/sub0/status" && break
+    sleep 0.01
+  done
 fi
 
 # 4. Cleanup trap to prevent stale PID files on exit
 CHILD_PID=""
 cleanup() {
-    if [[ -n "$CHILD_PID" ]] && kill -0 "$CHILD_PID" 2>/dev/null; then
-        kill -TERM "$CHILD_PID" 2>/dev/null || true
-        wait "$CHILD_PID" 2>/dev/null || true
-    fi
-    rm -f "$PIDFILE"
+  if [[ -n "$CHILD_PID" ]] && kill -0 "$CHILD_PID" 2>/dev/null; then
+    kill -TERM "$CHILD_PID" 2>/dev/null || true
+    wait "$CHILD_PID" 2>/dev/null || true
+  fi
+  rm -f "$PIDFILE"
 }
 trap cleanup EXIT INT TERM
 
 # 5. Launch requested engine pinned to Core 0 (SCHED_FIFO 80)
 CMD=()
 case "$MODE" in
-    music)
-        CMD=(flac_ax --device "$DEVICE" --volume "$VOL" "$TARGET")
-        ;;
-    synth)
-        CMD=(ax_av_studio --device "$DEVICE" --volume "$VOL")
-        ;;
-    retro)
-        CMD=(ax_video_upscaler --mode retro --preset 1080p --device "$DEVICE" --volume "$VOL")
-        ;;
-    dvd)
-        CMD=(ax_video_upscaler --mode dvd --preset 2k --input "$TARGET" --device "$DEVICE" --volume "$VOL")
-        ;;
+  music)
+    CMD=(flac_ax --device "$DEVICE" --volume "$VOL" "$TARGET")
+    ;;
+  synth)
+    CMD=(ax_av_studio --device "$DEVICE" --volume "$VOL")
+    ;;
+  retro)
+    CMD=(ax_video_upscaler --mode retro --preset 1080p --device "$DEVICE" --volume "$VOL")
+    ;;
+  dvd)
+    CMD=(ax_video_upscaler --mode dvd --preset 2k --input "$TARGET" --device "$DEVICE" --volume "$VOL")
+    ;;
+  clap)
+    CMD=(ax_clap_host "$TARGET" "" 48000 96 --device "$DEVICE")
+    ;;
+  lv2)
+    CMD=(ax_lv2_host "$TARGET" 48000 96 --device "$DEVICE")
+    ;;
 esac
 
 chrt -f 80 taskset -c 0 "${CMD[@]}" &
@@ -435,17 +440,17 @@ ps -eLo pid,cls,rtprio,psr,comm | grep ax_av_studio
 
 ---
 
-## 💻 Section 9: Windows 10/11 Dual-Boot Fallback Setup
+## 💻 Section 9: Windows 10/11 Dual-Boot & Build Setup
 
 1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (plus disable Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.  
-2. **Match Sample Rate / Exclusive Bit-Exact Mode:** Set the default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies). For bit-perfect, bypass-mixer playback, use **ASIO** (`FlexASIO` in Exclusive mode targeting the HiBy FC3 `VID 0x32BB`) or **WASAPI Exclusive Mode** in Foobar2000 / MusicBee / `flac_ax`.  
+2. **Match Sample Rate / Exclusive Bit-Exact Mode:** Set the default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies). For bit-perfect, bypass-mixer playback, use **ASIO** (`FlexASIO` in Exclusive mode targeting the HiBy FC3 `VID 0x32BB`) or **WASAPI Exclusive Mode** in Foobar2000 / MusicBee / `flac_ax` / `ax_clap_host`.  
 3. **Gain Staging:** Keep Windows master volume at **100%** when feeding the **Nobsound Q10** (`TPA3116`) speaker amplifier and control listening level solely via the physical amp dial; drop Windows volume to **50–65%** for the **Grado SR325x**, or **20–30%** before plugging in sensitive `16–18 Ω` IEMs or headphones.
 
 ### 9.1 Ready-to-Copy `FlexASIO.toml` (HiBy FC3 WASAPI Exclusive)
 
-Save this configuration to `%USERPROFILE%\FlexASIO.toml` so ASIO-capable players (`flac_ax`, `Eden-Espresso-Wave-AX`, Foobar2000) bypass the Windows audio mixer at low latency:
+Save this configuration to `%USERPROFILE%\FlexASIO.toml` so ASIO-capable players (`flac_ax`, `ax_clap_host`, `Eden-Espresso-Wave-AX`, Foobar2000) bypass the Windows audio mixer at low latency:
 
-```toml
+```
 # %USERPROFILE%\FlexASIO.toml — Bit-perfect WASAPI Exclusive profile for HiBy FC3
 backend = "Windows WASAPI"
 bufferSizeSamples = 128
@@ -461,6 +466,4 @@ wasapiAutoConvert = false
 suggestedLatencySeconds = 0.003
 ```
 
-&nbsp;
-
-*Verification:* Open the `FlexASIO` GUI or run `FlexASIOUtil`—confirm the active output reports `WASAPI Exclusive` at `32-bit` / `24-bit` integer without sample-rate conversion (`wasapiAutoConvert = false`).
+*Verification:* Open the `FlexASIO` GUI or run `FlexASIOUtil`—confirm the active output reports `WASAPI Exclusive` at `32-bit` / `48000 Hz` (or negotiated native sample rate) with zero shared-mixer conversion.
