@@ -5,6 +5,7 @@
 #include "preload_policy.hpp"
 #include "tracker_openmpt_reader.hpp"
 
+#if !defined(_WIN32)
 #include <FLAC++/decoder.h>
 #include <FLAC/metadata.h>
 #include <alsa/asoundlib.h>
@@ -15,6 +16,15 @@
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#define FLAC_AX_MAIN_HAS_FLAC_AND_ALSA 1
+#else
+#include <csignal>
+#if defined(FLAC_AX_HAS_FLACPP)
+#include <FLAC++/decoder.h>
+#include <FLAC/metadata.h>
+#define FLAC_AX_MAIN_HAS_FLACPP 1
+#endif
+#endif
 
 #include <algorithm>
 #include <array>
@@ -90,6 +100,7 @@ void OnSignal(int /*sig*/) noexcept {
 }
 
 void InstallSignals() noexcept {
+#if !defined(_WIN32)
     struct sigaction sa {};
     sa.sa_handler = OnSignal;
     sigemptyset(&sa.sa_mask);
@@ -97,9 +108,14 @@ void InstallSignals() noexcept {
     sigaction(SIGINT, &sa, nullptr);
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGUSR1, &sa, nullptr);
+#else
+    std::signal(SIGINT, OnSignal);
+    std::signal(SIGTERM, OnSignal);
+#endif
 }
 
 void PinThread(int core_id, int fifo_prio) noexcept {
+#if !defined(_WIN32)
     if (core_id >= 0) {
         cpu_set_t set;
         CPU_ZERO(&set);
@@ -111,6 +127,10 @@ void PinThread(int core_id, int fifo_prio) noexcept {
         sp.sched_priority = fifo_prio;
         (void)::pthread_setschedparam(::pthread_self(), SCHED_FIFO, &sp);
     }
+#else
+    (void)core_id;
+    (void)fifo_prio;
+#endif
 }
 
 bool IsSupportedAudioExtension(const std::filesystem::path& path) {
@@ -122,6 +142,7 @@ bool IsSupportedAudioExtension(const std::filesystem::path& path) {
            flac_ax::tracker::IsTrackerExtension(path);
 }
 
+#if defined(FLAC_AX_MAIN_HAS_FLAC_AND_ALSA)
 bool IsDsdExtension(const std::filesystem::path& path) {
     std::string ext = path.extension().string();
     for (auto& ch : ext) {
@@ -129,6 +150,7 @@ bool IsDsdExtension(const std::filesystem::path& path) {
     }
     return ext == ".dsf" || ext == ".dff";
 }
+#endif
 
 void CollectTracks(const std::vector<std::string>& inputs,
                    std::vector<std::filesystem::path>& out_tracks) {
@@ -150,6 +172,7 @@ void CollectTracks(const std::vector<std::string>& inputs,
     }
 }
 
+#if defined(FLAC_AX_MAIN_HAS_FLAC_AND_ALSA)
 struct StreamFormatSpec {
     unsigned int sample_rate_hz{48000U};
     unsigned int source_bits{24U};
@@ -158,7 +181,6 @@ struct StreamFormatSpec {
     std::string label;
 };
 
-// Lock-free 262,144-frame stereo S32_LE ring buffer with stream-format barrier
 class StereoFrameRing {
 public:
     static constexpr std::size_t kCapacityFrames = 262144U;
@@ -407,6 +429,7 @@ bool ConfigureAlsaDevice(snd_pcm_t* pcm,
     out_period_frames = period;
     return flac_ax::ess::OnEssHardwareConfigured(chip, pcm, out_rate_hz, out_period_frames);
 }
+#endif
 
 void PrintUsage() {
     std::cerr
@@ -498,6 +521,20 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    InstallSignals();
+
+#if !defined(FLAC_AX_MAIN_HAS_FLAC_AND_ALSA)
+    (void)device_override;
+    (void)mixer_card;
+    (void)chip_spec;
+    (void)has_volume;
+    (void)target_volume;
+    (void)period_frames_u32;
+    (void)mod_rate_hz;
+    (void)tracker_cfg;
+    std::cout << "[FLAC_AX] Windows build mode: ALSA/FLAC++ hardware transport skipped (use Linux/Piccolo-AX for hardware I/O)\n";
+    return 0;
+#else
     std::vector<std::string> track_strings;
     track_strings.reserve(tracks.size());
     for (const auto& t : tracks) {
@@ -512,7 +549,6 @@ int main(int argc, char** argv) {
     const auto chip = *chip_opt;
     const std::string alsa_dev = !device_override.empty() ? device_override : chip.default_alsa_device;
 
-    InstallSignals();
     if (::mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
         std::cerr << "[FLAC_AX] WARN: mlockall skipped (check CAP_IPC_LOCK / RLIMIT_MEMLOCK)\n";
     }
@@ -568,7 +604,6 @@ int main(int argc, char** argv) {
     std::atomic<std::uint64_t> track_generation{0ULL};
     std::atomic<std::uint64_t> xrun_count{0ULL};
 
-    // Core 5 (0x20): Persistent RAM Preloader + FLAC / DoP / OpenMPT Decoder Worker
     std::thread decoder_thread([&]() {
         PinThread(5, 0);
         flac_ax::RamFilePreloader preloader(preload_policy);
@@ -592,7 +627,6 @@ int main(int argc, char** argv) {
                     continue;
                 }
 
-                // Wait for previous track ring to drain before switching sample rate barrier
                 while (ring.AvailableToRead() > 0U && g_running.load(std::memory_order_acquire)) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 }
@@ -680,12 +714,10 @@ int main(int argc, char** argv) {
                     std::fclose(disk_fp);
                 }
             } else {
-                // Probe metadata / stream FLAC
                 while (ring.AvailableToRead() > 0U && g_running.load(std::memory_order_acquire)) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 }
 
-                // Read streaminfo sample rate before starting decode so Core 0 locks hardware rate first
                 FLAC__StreamMetadata si{};
                 unsigned int file_rate = 48000U;
                 unsigned int file_bps = 16U;
@@ -715,7 +747,6 @@ int main(int argc, char** argv) {
         playlist_done.store(true, std::memory_order_release);
     });
 
-    // Core 0 (0x01 / SCHED_FIFO 80): Bit-Perfect ESS Sabre ALSA Writer
     PinThread(0, 80);
 
     while (g_running.load(std::memory_order_acquire) &&
@@ -810,4 +841,5 @@ int main(int argc, char** argv) {
     ax::ShutdownTelemetryShm();
 #endif
     return 0;
+#endif
 }
