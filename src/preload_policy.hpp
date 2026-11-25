@@ -1,8 +1,12 @@
 #pragma once
 
+#if !defined(_WIN32)
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#else
+#include <windows.h>
+#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -48,6 +52,7 @@ inline void ReadLinuxMemInfo(std::uint64_t& mem_total_bytes,
     mem_total_bytes = 0;
     mem_available_bytes = 0;
 
+#if !defined(_WIN32)
     std::ifstream meminfo("/proc/meminfo");
     if (!meminfo.is_open()) {
         return;
@@ -67,6 +72,7 @@ inline void ReadLinuxMemInfo(std::uint64_t& mem_total_bytes,
             break;
         }
     }
+#endif
 }
 
 inline PreloadPolicy EvaluatePreloadPolicy(
@@ -110,7 +116,16 @@ inline PreloadPolicy EvaluatePreloadPolicy(
 inline PreloadPolicy DetectHostPreloadPolicy() noexcept {
     std::uint64_t total = 0;
     std::uint64_t avail = 0;
+#if defined(_WIN32)
+    MEMORYSTATUSEX statex{};
+    statex.dwLength = sizeof(statex);
+    if (::GlobalMemoryStatusEx(&statex)) {
+        total = static_cast<std::uint64_t>(statex.ullTotalPhys);
+        avail = static_cast<std::uint64_t>(statex.ullAvailPhys);
+    }
+#else
     ReadLinuxMemInfo(total, avail);
+#endif
     return EvaluatePreloadPolicy(total, avail);
 }
 
@@ -192,6 +207,24 @@ public:
 
 private:
     static bool ReadFileToMemory(const std::string& path, std::vector<std::uint8_t>& out) {
+#if defined(_WIN32)
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) {
+            return false;
+        }
+        const auto end_pos = file.tellg();
+        if (end_pos <= 0) {
+            return false;
+        }
+        const auto file_size = static_cast<std::size_t>(end_pos);
+        file.seekg(0, std::ios::beg);
+        out.resize(file_size);
+        if (!file.read(reinterpret_cast<char*>(out.data()), static_cast<std::streamsize>(file_size))) {
+            out.clear();
+            return false;
+        }
+        return true;
+#else
         const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
         if (fd < 0) {
             return false;
@@ -222,6 +255,7 @@ private:
 
         ::close(fd);
         return true;
+#endif
     }
 
     PreloadPolicy policy_;
@@ -230,3 +264,4 @@ private:
 };
 
 } // namespace flac_ax
+```[cite: 30]
