@@ -579,7 +579,7 @@ int main(int argc, char** argv) {
             abort_track.store(false, std::memory_order_release);
             preloader.RefreshWindow(track_strings, idx);
             const auto& path = tracks[idx];
-            const auto* cached = preloader.Find(path);
+            const auto* cached = preloader.Find(path.string());
 
             if (flac_ax::tracker::IsTrackerExtension(path)) {
                 flac_ax::tracker::OpenMptModuleStreamer mod_stream;
