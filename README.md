@@ -56,76 +56,100 @@ ninja -C build -j 4
 
 *(Note: When `ax-sdk` is not pre-installed locally via `AX_SDK_DIR` or `../ax-sdk`, CMake automatically fetches `ax-sdk` tag `v1_36_2` via `FetchContent`.)*
 
-# **🎛️ 4\. Reference Execution & Multi-DAC Gain Staging**
+## 🎛️ 4. Reference Execution & Multi-DAC Gain Staging
 
-All audio-capable binaries acquire `/run/lock/ax-dac.lock` (`flock(LOCK_EX | LOCK_NB)`) and release the DAC cleanly on `SIGUSR1`, `SIGTERM`, or `SIGINT`.h
+All audio-capable binaries acquire `/run/lock/ax-dac.lock` (`flock(LOCK_EX | LOCK_NB)`) and release the DAC cleanly on `SIGUSR1`, `SIGTERM`, or `SIGINT`.
 
-# **1\. Speakers — 2.0 Vrms HiBy FC3 (112 mW) \-\> Nobsound Q10 (TPA3116) \-\> Wharfedale Diamond 9.0**
+### 1. Speakers — 2.0 Vrms HiBy FC3 (112 mW) -> Nobsound Q10 (TPA3116) -> Wharfedale Diamond 9.0
 
-./build/flac\_ax \--device hw:CARD=FC3,DEV=0 \--volume 0.80 \~/Music/FLAC\_Album/\*.flac
-
-# **2\. Speakers — Early 1.3 Vrms HiBy FC3 Revision (70 mW) \-\> Class-D Amp**
-
-./build/flac\_ax \--device hw:CARD=FC3,DEV=0 \--volume 0.95 \~/Music/FLAC\_Album/\*.flac
-
-# **3\. Speakers — TRN Black Pearl / Moondrop Dawn Pro 2 (2.0 Vrms) or FiiO KA11 (2.5 Vrms)**
-
-./build/flac\_ax \--device hw:CARD=BLACKPEARL,DEV=0 \--mixer-card BLACKPEARL \--volume 0.80 \~/Music/FLAC\_Album/\*.flac  
-./build/flac\_ax \--device hw:CARD=KA11,DEV=0 \--mixer-card KA11 \--volume 0.72 \~/Music/FLAC\_Album/\*.flac
-
-# **4\. Reference Open-Back Headphones (Grado SR325x, 38 Ohm) & High-Z Studio Cans (HD 560S, 120 Ohm)**
-
-./build/flac\_ax \--device hw:CARD=FC3,DEV=0 \--volume 0.55 \~/Music/FLAC\_Album/\*.flac  
-./build/flac\_ax \--device hw:CARD=FC3,DEV=0 \--volume 0.70 \~/Music/FLAC\_Album/\*.flac
-
-# **5\. Sensitive IEMs (16–32 Ohm, e.g., Moondrop Chu II / Truthear Hexa)**
-
-./build/flac\_ax \--device hw:CARD=FC3,DEV=0 \--volume 0.22 \~/Music/FLAC\_Album/\*.flac
-
-# **6\. Amiga / Atari ST Tracker Modules (.mod/.xm/.s3m/.it) via libopenmpt \-\> S32\_LE**
-
-./build/flac\_ax \--device hw:CARD=FC3,DEV=0 \--volume 0.80 \--mod-stereo 75 \~/Music/Amiga/\*.mod
-
-# **7\. Live 2.00 ms AV Synthesizer & OpenGL Studio HUD (+ Lock-Free 24-bit WAV Bounce)**
-
-./build/ax\_av\_studio \--fullscreen \--record \~/Music/jam.wav \--device hw:CARD=FC3,DEV=0 \--volume 0.80
-
-# **8\. Single-Stream Retro HDMI Capture Upscaler (MacroSilicon MS2130S \-\> 1080p Bob) & DVD 2K Upscaler**
-
-./build/ax\_video\_upscaler \--mode retro \--preset 1080p \--v4l2 /dev/video0 \--scan bob \--device hw:CARD=FC3,DEV=0 \--volume 0.80  
-./build/ax\_video\_upscaler \--mode dvd \--preset 2k \--input /userdata/dvd/movie.iso \--scan dvd \--device hw:CARD=FC3,DEV=0 \--volume 0.80
-
-# **9\. Core 5 Coffee/Espresso Appliance TUI Launcher**
-
-./build/ax\_appliance\_tui
-
+```sh
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.80 ~/Music/FLAC_Album/*.flac
 ```
+
+### 2. Speakers — Early 1.3 Vrms HiBy FC3 Revision (70 mW) -> Class-D Amp
+
+```sh
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.95 ~/Music/FLAC_Album/*.flac
+```
+
+### 3. Speakers — TRN Black Pearl / Moondrop Dawn Pro 2 (2.0 Vrms) or FiiO KA11 (2.5 Vrms)
+
+```sh
+./build/flac_ax --device hw:CARD=BLACKPEARL,DEV=0 --mixer-card BLACKPEARL --volume 0.80 ~/Music/FLAC_Album/*.flac
+./build/flac_ax --device hw:CARD=KA11,DEV=0 --mixer-card KA11 --volume 0.72 ~/Music/FLAC_Album/*.flac
+```
+
+### 4. Reference Open-Back Headphones (Grado SR325x, 38 Ohm) & High-Z Studio Cans (HD 560S, 120 Ohm)
+
+```sh
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.55 ~/Music/FLAC_Album/*.flac
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.70 ~/Music/FLAC_Album/*.flac
+```
+
+### 5. Sensitive IEMs (16–32 Ohm, e.g., Moondrop Chu II / Truthear Hexa)
+
+```sh
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.22 ~/Music/FLAC_Album/*.flac
+```
+
+### 6. Amiga / Atari ST Tracker Modules (`.mod`/`.xm`/`.s3m`/`.it`) via `libopenmpt` -> `S32_LE`
+
+```sh
+./build/flac_ax --device hw:CARD=FC3,DEV=0 --volume 0.80 ~/Music/Mods/*.mod
+```
+
+### 7. Live 2.00 ms Synthesizer & OpenGL Studio HUD (with 24-bit WAV Bounce)
+
+```sh
+./build/ax_av_studio --fullscreen --record ~/Music/jam.wav --device hw:CARD=FC3,DEV=0 --volume 0.80
+```
+
+### 8. Single-Stream Retro HDMI Capture Upscaler (MacroSilicon MS2130S -> 1080p Bob) & DVD 2K Upscaler
+
+```sh
+./build/ax_video_upscaler --mode retro --preset 1080p --v4l2 /dev/video0 --scan bob --device hw:CARD=FC3,DEV=0 --volume 0.80
+./build/ax_video_upscaler --mode dvd --preset 2k --input /userdata/dvd/movie.iso --scan dvd --device hw:CARD=FC3,DEV=0 --volume 0.80
+```
+
+### 9. Core 5 Coffee/Espresso Appliance TUI Launcher
+
+```sh
+./build/ax_appliance_tui
+```
+
+---
 
 ## 📚 5. Documentation
 
-* **Technical Architecture & Ecosystem Specification** (`docs/Architecture.md`) — `2:3:1` CPU core topology, ESS DAC clock-domain isolation, RAM preload tiers, lock-free V4L2 seqlock handoff, and OpenGL 3.3 `Y`/`UV` shader pipeline.
-* **Complete User Guide & Build Manual** (`docs/FLAC_AX_AVStudio_Complete_User_Guide.md`) — End-to-end build manual, commercial software/hardware comparison matrix, and gain-staged execution recipes.
-* **Bare-Metal Audio, AV & Hardware Master Guide (UK)** (`docs/FLAC_AX_Bare-Metal_Audio_AV_Appliance_Guide.md`) — Complete UK hardware blueprints (`£45–£554`), Class-D PSU electrical safety, multi-DAC `99-ax-usb-dacs.rules`, `6.12-rt` Linux setup, and Windows `FlexASIO.toml`.
-* **Sub-£50 USB-C DAC Silicon Shootout** (`docs/DACS.md`) — Circuit-level benchmark of **HiBy FC3 (`2.0 Vrms` & `1.3 Vrms`)**, **TRN Black Pearl**, **FiiO KA11**, **Moondrop Dawn Pro 2**, and **Apple USB-C (UK A2155)**.
-* **Enthusiast Guide to `FLAC_AX` & `AX AV Studio`** (`docs/Hi-Fi_and_Studio_Enthusiasts_Guide.md`) — Plain-English guide to whole-album RAM transport, the three-engine synth/reverb/tape-delay DSP chain, and **Akai MPK Mini MK3** control mapping.
-* **Transducer & Cabling Guide (Richer Sounds UK)** (`docs/Speakers_Headphones_and_Wiring.md`) — Nearfield bookshelf speakers (`£99–£149`), wired headphones/IEMs (`£16–£299`), desk acoustics, and pre-terminated `£6.45` banana-plug speaker cables.
-* **Sprint Progress Report** (`docs/FLAC_AX Audio Repository Sprint Report_nov26.md`) — Detailed engineering log of completed deliverables and hardware validation gates.
+* **Technical Architecture & Ecosystem Specification** (`docs/Architecture.md`) — `2:3:1` CPU core topology, ESS DAC clock-domain isolation, ring buffer transport, and build targets
+* **Complete User Guide & Build Manual** (`docs/FLAC_AX_AVStudio_Complete_User_Guide.md`) — End-to-end build manual, commercial software/hardware comparisons, and studio/host workflows
+* **Bare-Metal Audio, AV & Hardware Master Guide (UK)** (`docs/FLAC_AX_Bare-Metal_Audio_AV_Appliance_Guide.md`) — Complete UK hardware stack, gain staging, Linux `udev`/WirePlumber setup, and `FlexASIO.toml`
+* **Sub-£50 USB-C DAC Silicon Shootout** (`docs/DACS.md`) — Circuit-level benchmark of **HiBy FC3** (`2.0 Vrms` & `1.3 Vrms`), **TRN Black Pearl**, **FiiO KA11**, and **Moondrop Dawn Pro 2**
+* **Enthusiast Guide to `FLAC_AX` & `AX AV Studio`** (`docs/Hi-Fi_and_Studio_Enthusiasts_Guide.md`) — Plain-English guide to whole-album RAM preloading, DoP DSD, tracker modules, and live synthesis
+* **Transducer & Cabling Guide (Richer Sounds UK)** (`docs/Speakers_Headphones_and_Wiring.md`) — Nearfield bookshelf speakers (`£99–£149`), Class-D amps, headphones/IEMs, and speaker cable pairing
+* **Sprint Progress Report** (`docs/FLAC_AX Audio Repository Sprint Report_251126.md`) — Detailed engineering log of completed deliverables, CLAP host integration, and build verification
+
+---
 
 ## 🌐 6. Silicon Preservation Society Ecosystem (All 9 Repositories)
 
-This repository is part of **The Silicon Preservation Society** (`[AX]`) ecosystem—a nine-repository bare-metal hardware preservation stack built around **Policy-in-SDK / Adapter-in-Consumer** separation:
+This repository is part of **The Silicon Preservation Society** (`[AX]`) ecosystem—a nine-repository bare-metal hardware preservation and deterministic runtime suite:
 
-1. **Shared Silicon SDK (GitHub):** [galaxywarriordad/ax-sdk](https://github.com/galaxywarriordad/ax-sdk.git) — Shared dependency-free C++20 deterministic hardware runtime (`ax::core` / `v1_36_2`), dynamic Intel SMT / AMD CCX / `RK3326` `1:2:1` topology resolver, `EngineConfig`, HugeTLB fastmem, and VRAM guardrails.
-2. **Linux USB Console & A/V Appliance (GitHub):** [galaxywarriordad/Piccolo-AX](https://github.com/galaxywarriordad/Piccolo-AX.git) — Standalone `< 512 MB` `toram` EROFS Batocera / Buildroot `Linux 6.12-rt` `x86_64` appliance (`batocera-ax-external`) with direct ALSA `SCHED_FIFO` and `iHD` VA-API `dma_buf`.
-3. **Linux Handheld Appliance (GitHub):** [galaxywarriordad/Piccolo-2go](https://github.com/galaxywarriordad/Piccolo-2go.git) — Deterministic Buildroot `aarch64` (`RK3326` `1:2:1`) retro handheld OS for **BATLEXP G350** and **R36S**.
-4. **Optional Desktop Tier (GitHub):** [galaxywarriordad/piccolo-ax-desktop](https://github.com/galaxywarriordad/piccolo-ax-desktop.git) — On-demand C/C++ LXQt/X11 desktop workbench (`< 42 MB` Tier A budget) isolated on housekeeping cores.
-5. **Bare-Metal Audio & A/V Engine (GitHub):** [galaxywarriordad/FLAC_AX](https://github.com/galaxywarriordad/FLAC_AX.git) — RAM-resident bit-perfect audio player, `ax_av_studio` MIDI/DSP synth workstation, `ax_video_upscaler` stream pipeline, and `ax_appliance_tui`.
-6. **Commodore Amiga Engine (GitHub):** [galaxywarriordad/Amiberry-AX](https://github.com/galaxywarriordad/Amiberry-AX.git) — Deterministic Commodore Amiga 500 / 1200 / CD32 engine linked against `ax-sdk`.
-7. **Retro Multi-System Engine (GitHub):** [galaxywarriordad/Generation-X-AX](https://github.com/galaxywarriordad/Generation-X-AX.git) — Unified C++20 `[AX]` adapter suite powering `RMG`, `BlastEm`, `Cannonball`, `Frontier`, `Flycast`, `Hatari`, and `EDuke32`.
-8. **Nintendo Switch Engine Fork (Forgejo):** [galaxywarriordad/Eden-Espresso-Wave-AX](https://git.eden-emu.dev/galaxywarriordad/Eden-Espresso-Wave-AX.git) — Deterministic Nintendo Switch fork tuned for `ax::core` core topology, Vulkan telemetry, and low-latency audio, kept aligned with upstream (`eden-emu/eden`) for frictionless PR cherry-picks.
-9. **Nintendo Wii U Engine Fork (GitHub):** [galaxywarriordad/Cemu-Latte-AX](https://github.com/galaxywarriordad/Cemu-Latte-AX.git) — Deterministic Nintendo Wii U (Latte GPU) `[AX]` engine powered by `ax::core` (`v1_36_2`).
+1. **Shared Silicon SDK (GitHub):** [galaxywarriordad/ax-sdk](https://github.com/galaxywarriordad/ax-sdk.git) — Shared dependency-free C++20 runtime (`ax::core`), `2:3:1` / `1:2:1` topology, HugeTLB fastmem, and telemetry
+2. **Linux USB Console & A/V Appliance (GitHub):** [galaxywarriordad/Piccolo-AX](https://github.com/galaxywarriordad/Piccolo-AX.git) — `< 512 MB` `toram` EROFS `Linux 6.12-rt` console and A/V appliance
+3. **Linux Handheld Appliance (GitHub):** [galaxywarriordad/Piccolo-2go](https://github.com/galaxywarriordad/Piccolo-2go.git) — Deterministic `aarch64` Buildroot handheld OS (`RK3326`, `1:2:1` isolation) for BATLEXP G350 & R36S
+4. **Optional Desktop Tier (GitHub):** [galaxywarriordad/piccolo-ax-desktop](https://github.com/galaxywarriordad/piccolo-ax-desktop.git) — `< 42 MB` Tier A LXQt/X11 workbench isolated on Core `5`
+5. **Bit-Perfect Audio, Plugin Hosts & A/V Engine (GitHub):** [galaxywarriordad/FLAC_AX](https://github.com/galaxywarriordad/FLAC_AX.git) — RAM-resident `S32_LE` / `DoP` / tracker transport, `ax_clap_host` & `ax_lv2_host`, `ax_av_studio`, `ax_video_upscaler`, and `ax_appliance_tui`
+6. **Commodore Amiga Engine (GitHub):** [galaxywarriordad/Amiberry-AX](https://github.com/galaxywarriordad/Amiberry-AX.git) — Deterministic Amiga 500/1200/CD32 engine linked against `ax-sdk`
+7. **Retro Multi-System Engine (GitHub):** [galaxywarriordad/Generation-X-AX](https://github.com/galaxywarriordad/Generation-X-AX.git) — Unified `[AX]` suite for RMG, BlastEm, Cannonball, EDuke32, Frontier: Elite II, Flycast, and Hatari
+8. **Nintendo Switch Engine Fork (Forgejo):** [galaxywarriordad/Eden-Espresso-Wave-AX](https://git.eden-emu.dev/galaxywarriordad/Eden-Espresso-Wave-AX.git) — Deterministic Switch engine with `clang-cl` Skylake/BMI2, ThinLTO, 3-stage PGO, and QSV offload
+9. **Nintendo Wii U Engine Fork (GitHub):** [galaxywarriordad/Cemu-Latte-AX](https://github.com/galaxywarriordad/Cemu-Latte-AX.git) — Deterministic Wii U engine linked against `ax-sdk`
 
-For full core-pinning tables (`2:3:1` and `1:2:1`), cross-repository data flow, and architectural specifications, see [ax-sdk/REPO_TOPOLOGY.md](https://github.com/galaxywarriordad/ax-sdk/blob/main/REPO_TOPOLOGY.md) and [ax-sdk/docs/ECOSYSTEM_ARCHITECTURE.md](https://github.com/galaxywarriordad/ax-sdk/blob/main/docs/ECOSYSTEM_ARCHITECTURE.md).
+For full core-pinning tables (`2:3:1` and `1:2:1`), cross-repository data flow, and architectural specifications, see [ax-sdk/REPO_TOPOLOGY.md](https://github.com/galaxywarriordad/ax-sdk/blob/main/REPO_TOPOLOGY.md).
+
+See the [9-Repository Cloud Build Guide](https://github.com/galaxywarriordad/ax-sdk/blob/main/docs/CLOUD_BUILDS.md) for remote GitHub Actions build triggers and release artifact details across the `[AX]` ecosystem.
+
+---
 
 ## 📄 7. License
 
