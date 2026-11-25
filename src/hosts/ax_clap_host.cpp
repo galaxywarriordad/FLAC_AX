@@ -141,8 +141,8 @@ int main(int argc, char** argv) {
     const double sample_rate = (argc >= 3) ? std::atof(argv[2]) : 48000.0;
     const uint32_t period_frames = (argc >= 4) ? static_cast<uint32_t>(std::strtoul(argv[3], nullptr, 10)) : 96U;
 
-    std::signal(SIGINT, handle_signal);
-    std::signal(SIGTERM, handle_signal);
+    ::signal(SIGINT, handle_signal);
+    ::signal(SIGTERM, handle_signal);
 
     // Pin host/DSP thread to Cores 2-4 (0x1C) on i5-9600K topology.
     pin_current_thread_mask(0x1CULL);
