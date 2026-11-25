@@ -478,7 +478,7 @@ int main(int argc, char** argv) {
         } else if (arg == "--help" || arg == "-h") {
             PrintUsage();
             return 0;
-        } else if (!arg.empty() && arg == '-') {
+        } else if (!arg.empty() && arg == "-") {
             PrintUsage();
             return 1;
         } else {
