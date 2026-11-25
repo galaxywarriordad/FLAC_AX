@@ -1,6 +1,23 @@
-// Minimal C++20 LV2 single-plugin host wired to ax::audio::LockFreeStereoRing.
+// C++20 CLAP single-plugin host wired to ax::audio::LockFreeStereoRing.
 // Target: Piccolo-AX / i5-9600K (2:3:1 topology: DSP on Cores 2-4, DAC output on Core 0).
 
+#include <clap/clap.h>
+
+#if !defined(_WIN32)
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <sched.h>
+#include <sys/file.h>
+#include <unistd.h>
+#else
+#if !defined(NOMINMAX)
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -8,23 +25,10 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
-#include <pthread.h>
-#include <sched.h>
-#include <sys/file.h>
+#include <string>
 #include <thread>
-#include <unistd.h>
 #include <vector>
 
-#include <lilv/lilv.h>
-#include <lv2/atom/atom.h>
-#include <lv2/atom/forge.h>
-#include <lv2/atom/util.h>
-#include <lv2/midi/midi.h>
-#include <lv2/urid/urid.h>
-
-// Replace with your ax-sdk ring header path when linking against libax_core, e.g.:
-// #include "ax/audio/lockfree_audio_queue.hpp"
 namespace ax::audio {
 
 class LockFreeStereoRing {
@@ -66,7 +70,8 @@ void handle_signal(int) noexcept {
     g_running.store(false, std::memory_order_release);
 }
 
-bool pin_current_thread_mask(uint64_t cpu_mask) noexcept {
+void pin_dsp_thread_mask(std::uint64_t cpu_mask) noexcept {
+#if !defined(_WIN32)
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     for (int cpu = 0; cpu < 64; ++cpu) {
@@ -74,10 +79,14 @@ bool pin_current_thread_mask(uint64_t cpu_mask) noexcept {
             CPU_SET(cpu, &cpuset);
         }
     }
-    return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) == 0;
+    (void)::pthread_setaffinity_np(::pthread_self(), sizeof(cpu_set_t), &cpuset);
+#else
+    (void)cpu_mask;
+#endif
 }
 
 int acquire_dac_lock(const char* lock_path) noexcept {
+#if !defined(_WIN32)
     const int fd = ::open(lock_path, O_CREAT | O_RDWR, 0666);
     if (fd < 0) {
         return -1;
@@ -87,9 +96,14 @@ int acquire_dac_lock(const char* lock_path) noexcept {
         return -1;
     }
     return fd;
+#else
+    (void)lock_path;
+    return 0;
+#endif
 }
 
 void release_dac_lock(int fd, const char* lock_path) noexcept {
+#if !defined(_WIN32)
     if (fd >= 0) {
         ::flock(fd, LOCK_UN);
         ::close(fd);
@@ -97,55 +111,98 @@ void release_dac_lock(int fd, const char* lock_path) noexcept {
     if (lock_path) {
         ::unlink(lock_path);
     }
+#else
+    (void)fd;
+    (void)lock_path;
+#endif
 }
 
-struct UridMap {
-    LV2_URID midi_event = 0;
-    LV2_URID atom_sequence = 0;
+struct SharedModuleHandle {
+#if !defined(_WIN32)
+    void* handle{nullptr};
+#else
+    HMODULE handle{nullptr};
+#endif
 
-    static LV2_URID map_cb(LV2_URID_Map_Handle handle, const char* uri) {
-        auto* self = static_cast<UridMap*>(handle);
-        if (!self || !uri) return 0;
-        if (std::strcmp(uri, LV2_MIDI__MidiEvent) == 0) return self->midi_event;
-        if (std::strcmp(uri, LV2_ATOM__Sequence) == 0) return self->atom_sequence;
-        return 0;
+    bool open(const char* path) noexcept {
+#if !defined(_WIN32)
+        handle = ::dlopen(path, RTLD_NOW | RTLD_LOCAL);
+        return handle != nullptr;
+#else
+        handle = ::LoadLibraryA(path);
+        return handle != nullptr;
+#endif
+    }
+
+    const clap_plugin_entry* entry() const noexcept {
+#if !defined(_WIN32)
+        if (!handle) return nullptr;
+        return reinterpret_cast<const clap_plugin_entry*>(::dlsym(handle, "clap_entry"));
+#else
+        if (!handle) return nullptr;
+        return reinterpret_cast<const clap_plugin_entry*>(
+            reinterpret_cast<void*>(::GetProcAddress(handle, "clap_entry")));
+#endif
+    }
+
+    void close() noexcept {
+#if !defined(_WIN32)
+        if (handle) {
+            ::dlclose(handle);
+            handle = nullptr;
+        }
+#else
+        if (handle) {
+            ::FreeLibrary(handle);
+            handle = nullptr;
+        }
+#endif
     }
 };
 
-struct PortBindings {
-    uint32_t num_ports = 0;
-    std::vector<float> audio_in_l;
-    std::vector<float> audio_in_r;
-    std::vector<float> audio_out_l;
-    std::vector<float> audio_out_r;
-    std::vector<float> control_vals;
-    std::vector<uint8_t> midi_in_buf;
-    std::vector<uint8_t> atom_out_buf;
-
-    int in_l_port = -1;
-    int in_r_port = -1;
-    int out_l_port = -1;
-    int out_r_port = -1;
-    int midi_in_port = -1;
+struct HostContext {
+    const clap_host host{};
 };
+
+const void* host_get_extension(const clap_host* /*host*/, const char* /*extension_id*/) {
+    return nullptr;
+}
+
+void host_request_restart(const clap_host* /*host*/) {}
+
+void host_request_process(const clap_host* /*host*/) {}
+
+void host_request_callback(const clap_host* /*host*/) {}
+
+void host_log(const clap_host* /*host*/, clap_log_severity severity, const char* msg) {
+    if (msg) {
+        std::fprintf(stderr, "[CLAP:%d] %s\n", static_cast<int>(severity), msg);
+    }
+}
 
 } // namespace
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "Usage: %s <plugin-uri> [sample-rate] [period-frames]\n", argv[0]);
+        std::fprintf(stderr, "Usage: %s <path-to-plugin.clap> [plugin-id] [sample-rate] [period-frames]\n", argv[0]);
         return 1;
     }
 
-    const char* plugin_uri_str = argv[1];
-    const double sample_rate = (argc >= 3) ? std::atof(argv[2]) : 48000.0;
-    const uint32_t period_frames = (argc >= 4) ? static_cast<uint32_t>(std::strtoul(argv[3], nullptr, 10)) : 96U;
+    const char* clap_path = argv[1];
+    const char* requested_id = (argc >= 3 && argv[2][0] != '\0') ? argv[2] : nullptr;
+    const double sample_rate = (argc >= 4) ? std::atof(argv[3]) : 48000.0;
+    const std::uint32_t period_frames =
+        (argc >= 5) ? static_cast<std::uint32_t>(std::strtoul(argv[4], nullptr, 10)) : 96U;
 
-    ::signal(SIGINT, handle_signal);
-    ::signal(SIGTERM, handle_signal);
+    if (sample_rate <= 0.0 || period_frames == 0U) {
+        std::fprintf(stderr, "Invalid sample rate or period frames\n");
+        return 1;
+    }
 
-    // Pin host/DSP thread to Cores 2-4 (0x1C) on i5-9600K topology.
-    pin_current_thread_mask(0x1CULL);
+    std::signal(SIGINT, handle_signal);
+    std::signal(SIGTERM, handle_signal);
+
+    pin_dsp_thread_mask(0x1CULL);
 
     constexpr const char* kDacLockPath = "/run/lock/ax-dac.lock";
     const int dac_lock_fd = acquire_dac_lock(kDacLockPath);
@@ -154,142 +211,202 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    LilvWorld* world = lilv_world_new();
-    lilv_world_load_all(world);
-
-    LilvNode* plugin_uri = lilv_new_uri(world, plugin_uri_str);
-    const LilvPlugins* plugins = lilv_world_get_all_plugins(world);
-    const LilvPlugin* plugin = lilv_plugins_get_by_uri(plugins, plugin_uri);
-    if (!plugin) {
-        std::fprintf(stderr, "LV2 plugin not found: %s\n", plugin_uri_str);
-        lilv_node_free(plugin_uri);
-        lilv_world_free(world);
+    SharedModuleHandle mod;
+    if (!mod.open(clap_path)) {
+        std::fprintf(stderr, "Failed loading CLAP module: %s\n", clap_path);
         release_dac_lock(dac_lock_fd, kDacLockPath);
         return 1;
     }
 
-    UridMap urid_map{};
-    urid_map.midi_event = 1;
-    urid_map.atom_sequence = 2;
-
-    LV2_URID_Map map_feature_data{&urid_map, &UridMap::map_cb};
-    const LV2_Feature map_feature{LV2_URID__map, &map_feature_data};
-    const LV2_Feature* features[] = {&map_feature, nullptr};
-
-    LilvInstance* instance = lilv_plugin_instantiate(plugin, sample_rate, features);
-    if (!instance) {
-        std::fprintf(stderr, "Failed instantiating LV2 plugin: %s\n", plugin_uri_str);
-        lilv_node_free(plugin_uri);
-        lilv_world_free(world);
+    const clap_plugin_entry* entry = mod.entry();
+    if (!entry || !entry->init || !entry->deinit || !entry->get_factory) {
+        std::fprintf(stderr, "Invalid clap_entry in %s\n", clap_path);
+        mod.close();
         release_dac_lock(dac_lock_fd, kDacLockPath);
         return 1;
     }
 
-    LilvNode* audio_class = lilv_new_uri(world, LV2_CORE__AudioPort);
-    LilvNode* control_class = lilv_new_uri(world, LV2_CORE__ControlPort);
-    LilvNode* input_class = lilv_new_uri(world, LV2_CORE__InputPort);
-    LilvNode* output_class = lilv_new_uri(world, LV2_CORE__OutputPort);
-    LilvNode* atom_class = lilv_new_uri(world, LV2_ATOM__AtomPort);
+    if (!entry->init(clap_path)) {
+        std::fprintf(stderr, "clap_plugin_entry::init failed for %s\n", clap_path);
+        mod.close();
+        release_dac_lock(dac_lock_fd, kDacLockPath);
+        return 1;
+    }
 
-    PortBindings ports{};
-    ports.num_ports = lilv_plugin_get_num_ports(plugin);
-    ports.audio_in_l.assign(period_frames, 0.0f);
-    ports.audio_in_r.assign(period_frames, 0.0f);
-    ports.audio_out_l.assign(period_frames, 0.0f);
-    ports.audio_out_r.assign(period_frames, 0.0f);
-    ports.control_vals.assign(ports.num_ports, 0.0f);
-    ports.midi_in_buf.assign(4096, 0);
-    ports.atom_out_buf.assign(4096, 0);
+    const auto* factory =
+        static_cast<const clap_plugin_factory*>(entry->get_factory(CLAP_PLUGIN_FACTORY_ID));
+    if (!factory || !factory->get_plugin_count || !factory->get_plugin_descriptor || !factory->create_plugin) {
+        std::fprintf(stderr, "CLAP plugin factory unavailable in %s\n", clap_path);
+        entry->deinit();
+        mod.close();
+        release_dac_lock(dac_lock_fd, kDacLockPath);
+        return 1;
+    }
 
-    for (uint32_t i = 0; i < ports.num_ports; ++i) {
-        const LilvPort* port = lilv_plugin_get_port_by_index(plugin, i);
-        const bool is_input = lilv_port_is_a(plugin, port, input_class);
-        const bool is_output = lilv_port_is_a(plugin, port, output_class);
-
-        if (lilv_port_is_a(plugin, port, audio_class)) {
-            if (is_input) {
-                if (ports.in_l_port < 0) ports.in_l_port = static_cast<int>(i);
-                else if (ports.in_r_port < 0) ports.in_r_port = static_cast<int>(i);
-                lilv_instance_connect_port(instance, i, (ports.in_r_port == static_cast<int>(i)) ? ports.audio_in_r.data() : ports.audio_in_l.data());
-            } else if (is_output) {
-                if (ports.out_l_port < 0) ports.out_l_port = static_cast<int>(i);
-                else if (ports.out_r_port < 0) ports.out_r_port = static_cast<int>(i);
-                lilv_instance_connect_port(instance, i, (ports.out_r_port == static_cast<int>(i)) ? ports.audio_out_r.data() : ports.audio_out_l.data());
-            }
-        } else if (lilv_port_is_a(plugin, port, control_class)) {
-            if (is_input) {
-                float def = 0.0f, min_v = 0.0f, max_v = 1.0f;
-                LilvNode* def_node = nullptr;
-                LilvNode* min_node = nullptr;
-                LilvNode* max_node = nullptr;
-                lilv_port_get_range(plugin, port, &def_node, &min_node, &max_node);
-                if (def_node && lilv_node_is_float(def_node)) def = lilv_node_as_float(def_node);
-                if (min_node && lilv_node_is_float(min_node)) min_v = lilv_node_as_float(min_node);
-                if (max_node && lilv_node_is_float(max_node)) max_v = lilv_node_as_float(max_node);
-                ports.control_vals[i] = (def < min_v) ? min_v : ((def > max_v) ? max_v : def);
-                lilv_node_free(def_node);
-                lilv_node_free(min_node);
-                lilv_node_free(max_node);
-            }
-            lilv_instance_connect_port(instance, i, &ports.control_vals[i]);
-        } else if (lilv_port_is_a(plugin, port, atom_class)) {
-            if (is_input && ports.midi_in_port < 0) {
-                ports.midi_in_port = static_cast<int>(i);
-                auto* seq = reinterpret_cast<LV2_Atom_Sequence*>(ports.midi_in_buf.data());
-                seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-                seq->atom.type = urid_map.atom_sequence;
-                seq->body.unit = 0;
-                seq->body.pad = 0;
-                lilv_instance_connect_port(instance, i, seq);
-            } else if (is_output) {
-                lilv_instance_connect_port(instance, i, ports.atom_out_buf.data());
-            }
+    const std::uint32_t count = factory->get_plugin_count(factory);
+    const clap_plugin_descriptor* desc = nullptr;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const auto* d = factory->get_plugin_descriptor(factory, i);
+        if (!d || !d->id) continue;
+        if (!requested_id || std::strcmp(d->id, requested_id) == 0) {
+            desc = d;
+            break;
         }
     }
 
-    ax::audio::LockFreeStereoRing ring(period_frames * 32);
-    std::vector<float> interleaved(period_frames * 2, 0.0f);
+    if (!desc || !desc->id) {
+        std::fprintf(stderr, "Requested CLAP plugin not found in %s\n", clap_path);
+        entry->deinit();
+        mod.close();
+        release_dac_lock(dac_lock_fd, kDacLockPath);
+        return 1;
+    }
 
-    lilv_instance_activate(instance);
+    static const clap_ext_log host_log_ext{host_log};
+    static HostContext host_ctx{
+        clap_host{
+            CLAP_VERSION,
+            nullptr,
+            "FLAC_AX",
+            "The Silicon Preservation Society",
+            "https://github.com/galaxywarriordad/FLAC_AX",
+            "1.36.2",
+            host_get_extension,
+            host_request_restart,
+            host_request_process,
+            host_request_callback,
+        }
+    };
+    (void)host_log_ext;
+
+    const clap_plugin* plugin = factory->create_plugin(factory, &host_ctx.host, desc->id);
+    if (!plugin || !plugin->init || !plugin->destroy) {
+        std::fprintf(stderr, "Failed creating CLAP plugin instance: %s\n", desc->id);
+        entry->deinit();
+        mod.close();
+        release_dac_lock(dac_lock_fd, kDacLockPath);
+        return 1;
+    }
+
+    if (!plugin->init(plugin)) {
+        std::fprintf(stderr, "CLAP plugin init failed: %s\n", desc->id);
+        plugin->destroy(plugin);
+        entry->deinit();
+        mod.close();
+        release_dac_lock(dac_lock_fd, kDacLockPath);
+        return 1;
+    }
+
+    std::vector<float> in_l(period_frames, 0.0f);
+    std::vector<float> in_r(period_frames, 0.0f);
+    std::vector<float> out_l(period_frames, 0.0f);
+    std::vector<float> out_r(period_frames, 0.0f);
+
+    float* in_ptrs[2]{in_l.data(), in_r.data()};
+    float* out_ptrs[2]{out_l.data(), out_r.data()};
+
+    clap_audio_buffer audio_in{};
+    audio_in.data32 = in_ptrs;
+    audio_in.data64 = nullptr;
+    audio_in.channel_count = 2;
+    audio_in.latency = 0;
+    audio_in.constant_mask = 0;
+
+    clap_audio_buffer audio_out{};
+    audio_out.data32 = out_ptrs;
+    audio_out.data64 = nullptr;
+    audio_out.channel_count = 2;
+    audio_out.latency = 0;
+    audio_out.constant_mask = 0;
+
+    clap_event_transport transport{};
+    transport.header.size = sizeof(transport);
+    transport.header.time = 0;
+    transport.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+    transport.header.type = CLAP_EVENT_TRANSPORT;
+    transport.header.flags = 0;
+    transport.flags = CLAP_TRANSPORT_HAS_TEMPO | CLAP_TRANSPORT_HAS_BEATS_TIMELINE;
+    transport.tempo = 120.0;
+
+    clap_input_events in_events{
+        nullptr,
+        [](const clap_input_events*) -> std::uint32_t { return 0U; },
+        [](const clap_input_events*, std::uint32_t) -> const clap_event_header* { return nullptr; },
+    };
+
+    clap_output_events out_events{
+        nullptr,
+        [](const clap_output_events*, const clap_event_header*) -> bool { return true; },
+    };
+
+    clap_process proc{};
+    proc.steady_time = -1;
+    proc.frames_count = period_frames;
+    proc.transport = &transport;
+    proc.audio_inputs = &audio_in;
+    proc.audio_inputs_count = 1;
+    proc.audio_outputs = &audio_out;
+    proc.audio_outputs_count = 1;
+    proc.in_events = &in_events;
+    proc.out_events = &out_events;
+
+    ax::audio::LockFreeStereoRing ring(period_frames * 32U);
+    std::vector<float> interleaved(period_frames * 2U, 0.0f);
+
+    const bool can_activate = (plugin->activate != nullptr);
+    const bool can_start_proc = (plugin->start_processing != nullptr);
+    const bool can_stop_proc = (plugin->stop_processing != nullptr);
+    const bool can_deactivate = (plugin->deactivate != nullptr);
+
+    if (can_activate && !plugin->activate(plugin, sample_rate, 1U, period_frames)) {
+        std::fprintf(stderr, "CLAP plugin activate failed: %s\n", desc->id);
+        plugin->destroy(plugin);
+        entry->deinit();
+        mod.close();
+        release_dac_lock(dac_lock_fd, kDacLockPath);
+        return 1;
+    }
+
+    if (can_start_proc && !plugin->start_processing(plugin)) {
+        std::fprintf(stderr, "CLAP plugin start_processing failed: %s\n", desc->id);
+        if (can_deactivate) plugin->deactivate(plugin);
+        plugin->destroy(plugin);
+        entry->deinit();
+        mod.close();
+        release_dac_lock(dac_lock_fd, kDacLockPath);
+        return 1;
+    }
 
     const auto period_ns = std::chrono::nanoseconds(
-        static_cast<uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
+        static_cast<std::uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
     auto next_tick = std::chrono::steady_clock::now();
+    std::int64_t sample_clock = 0;
 
-    // Hot DSP loop: zero heap allocations, zero blocking mutexes, zero I/O.
-    while (g_running.load(std::memory_order_acquire)) {
-        if (ports.midi_in_port >= 0) {
-            auto* seq = reinterpret_cast<LV2_Atom_Sequence*>(ports.midi_in_buf.data());
-            seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-            // Drain pre-queued MIDI events from Core 5 into `seq` here without allocating.
+    while (g_running.load(std::memory_order_acquire) && plugin->process != nullptr) {
+        proc.steady_time = sample_clock;
+        transport.header.time = static_cast<std::uint32_t>(sample_clock);
+        (void)plugin->process(plugin, &proc);
+
+        for (std::uint32_t n = 0; n < period_frames; ++n) {
+            interleaved[n * 2U + 0U] = out_l[n];
+            interleaved[n * 2U + 1U] = out_r[n];
         }
-
-        lilv_instance_run(instance, period_frames);
-
-        for (uint32_t n = 0; n < period_frames; ++n) {
-            const float l = ports.audio_out_l[n];
-            const float r = (ports.out_r_port >= 0) ? ports.audio_out_r[n] : l;
-            interleaved[n * 2]     = l;
-            interleaved[n * 2 + 1] = r;
-        }
-
         ring.push_interleaved(interleaved.data(), period_frames);
 
+        sample_clock += static_cast<std::int64_t>(period_frames);
         next_tick += period_ns;
         std::this_thread::sleep_until(next_tick);
     }
 
-    lilv_instance_deactivate(instance);
-    lilv_instance_free(instance);
-
-    lilv_node_free(audio_class);
-    lilv_node_free(control_class);
-    lilv_node_free(input_class);
-    lilv_node_free(output_class);
-    lilv_node_free(atom_class);
-    lilv_node_free(plugin_uri);
-    lilv_world_free(world);
-
+    if (can_stop_proc) {
+        plugin->stop_processing(plugin);
+    }
+    if (can_deactivate) {
+        plugin->deactivate(plugin);
+    }
+    plugin->destroy(plugin);
+    entry->deinit();
+    mod.close();
     release_dac_lock(dac_lock_fd, kDacLockPath);
     return 0;
 }
