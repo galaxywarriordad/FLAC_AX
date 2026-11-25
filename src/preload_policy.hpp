@@ -5,6 +5,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #else
+#if !defined(NOMINMAX)
+#define NOMINMAX
+#endif
 #include <windows.h>
 #endif
 
@@ -90,7 +93,7 @@ inline PreloadPolicy EvaluatePreloadPolicy(
 
     if (mem_total_bytes >= kWholeAlbumThreshold) {
         policy.mode = PreloadMode::WholeAlbum;
-        policy.max_window_files = std::numeric_limits<std::size_t>::max();
+        policy.max_window_files = (std::numeric_limits<std::size_t>::max)();
         policy.max_total_bytes = static_cast<std::size_t>(8ULL * kGiB);
     } else if (mem_total_bytes >= kEightGbTierMin) {
         policy.mode = PreloadMode::Window3Files;
