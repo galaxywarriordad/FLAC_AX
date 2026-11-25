@@ -1,11 +1,13 @@
-// src/midi/mpk_mini3.cpp — Core 5 ALSA RawMIDI implementation for Akai MPK Mini MK3
 #include "midi/mpk_mini3.hpp"
 
+#if !defined(_WIN32)
 #include <alsa/asoundlib.h>
 #include <pthread.h>
 #include <sched.h>
+#endif
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
@@ -13,7 +15,6 @@
 namespace flac_ax::midi {
 
 MpkMini3Listener::MpkMini3Listener() {
-    // Initialize K1..K8 to sensible midpoint defaults (64)
     for (auto& k : state_.knobs) {
         k.store(64, std::memory_order_relaxed);
     }
@@ -24,19 +25,27 @@ MpkMini3Listener::~MpkMini3Listener() {
 }
 
 void MpkMini3Listener::Start(int core_id, const std::string& explicit_device) {
+#if defined(_WIN32)
+    (void)core_id;
+    (void)explicit_device;
+    state_.connected.store(false, std::memory_order_release);
+#else
     if (running_.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
     worker_ = std::thread(&MpkMini3Listener::RunLoop, this, core_id, explicit_device);
+#endif
 }
 
 void MpkMini3Listener::Stop() {
+#if !defined(_WIN32)
     if (!running_.exchange(false, std::memory_order_acq_rel)) {
         return;
     }
     if (worker_.joinable()) {
         worker_.join();
     }
+#endif
     state_.connected.store(false, std::memory_order_release);
 }
 
@@ -59,13 +68,16 @@ void MpkMini3Listener::Enqueue(const MidiEvent& ev) noexcept {
     const std::size_t head = head_.load(std::memory_order_relaxed);
     const std::size_t next = (head + 1) & kQueueMask;
     if (next == tail_.load(std::memory_order_acquire)) {
-        return; // Drop oldest overflow cleanly without blocking Core 5
+        return;
     }
     ring_[head] = ev;
     head_.store(next, std::memory_order_release);
 }
 
 std::string MpkMini3Listener::AutoDetectMpkDevice() {
+#if defined(_WIN32)
+    return {};
+#else
     std::ifstream cards("/proc/asound/cards");
     if (!cards.is_open()) {
         return "hw:1,0,0";
@@ -85,11 +97,12 @@ std::string MpkMini3Listener::AutoDetectMpkDevice() {
         }
     }
     return "hw:CARD=MPKmini3,DEV=0";
+#endif
 }
 
 void MpkMini3Listener::ParseByte(std::uint8_t byte) noexcept {
     if (byte >= 0xF8) {
-        return; // Ignore MIDI real-time clock ticks (0xF8..0xFF)
+        return;
     }
     if (byte == 0xF0) {
         in_sysex_ = true;
@@ -190,11 +203,15 @@ void MpkMini3Listener::ParseByte(std::uint8_t byte) noexcept {
 }
 
 void MpkMini3Listener::RunLoop(int core_id, std::string explicit_device) {
+#if defined(_WIN32)
+    (void)core_id;
+    (void)explicit_device;
+#else
     if (core_id >= 0) {
         cpu_set_t set;
         CPU_ZERO(&set);
         CPU_SET(static_cast<unsigned int>(core_id), &set);
-        pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+        (void)::pthread_setaffinity_np(::pthread_self(), sizeof(set), &set);
     }
 
     snd_rawmidi_t* midi_in = nullptr;
@@ -221,7 +238,6 @@ void MpkMini3Listener::RunLoop(int core_id, std::string explicit_device) {
         } else if (n == -EAGAIN) {
             std::this_thread::sleep_for(std::chrono::microseconds(500));
         } else {
-            // Hot-unplug recovery
             snd_rawmidi_close(midi_in);
             midi_in = nullptr;
             state_.connected.store(false, std::memory_order_release);
@@ -232,6 +248,7 @@ void MpkMini3Listener::RunLoop(int core_id, std::string explicit_device) {
     if (midi_in != nullptr) {
         snd_rawmidi_close(midi_in);
     }
+#endif
 }
 
 } // namespace flac_ax::midi
