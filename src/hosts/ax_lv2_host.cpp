@@ -1,20 +1,8 @@
-// Minimal C++20 LV2 single-plugin host wired to ax::audio::LockFreeStereoRing.
+// C++20 LV2 single-plugin host wired to StereoFloatRing, ScopedDacLock, and real sink drain.
 // Target: Piccolo-AX / i5-9600K (2:3:1 topology: DSP on Cores 2-4, DAC output on Core 0).
 
-#include <atomic>
-#include <chrono>
-#include <csignal>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-#include <fcntl.h>
-#include <pthread.h>
-#include <sched.h>
-#include <sys/file.h>
-#include <thread>
-#include <unistd.h>
-#include <vector>
+#include "audio/ax_dac_lock.hpp"
+#include "audio/ax_stereo_ring.hpp"
 
 #include <lilv/lilv.h>
 #include <lv2/atom/atom.h>
@@ -23,42 +11,33 @@
 #include <lv2/midi/midi.h>
 #include <lv2/urid/urid.h>
 
-// Replace with your ax-sdk ring header path, e.g.:
-// #include "ax/audio/lockfree_audio_queue.hpp"
-namespace ax::audio {
+#if !defined(_WIN32)
+#include <alsa/asoundlib.h>
+#include <pthread.h>
+#include <sched.h>
+#include <unistd.h>
+#define AX_LV2_HAS_ALSA 1
+#endif
 
-// Minimal placeholder signature matching LockFreeStereoRing conventions;
-// bind directly to ax::audio::LockFreeStereoRing from ax-sdk.
-class LockFreeStereoRing {
-public:
-    explicit LockFreeStereoRing(std::size_t capacity_frames)
-        : capacity_(capacity_frames), buf_(capacity_frames * 2, 0.0f) {}
+#if defined(FLAC_AX_HAS_AX_SDK)
+#if __has_include(<ax/telemetry.hpp>)
+#include <ax/telemetry.hpp>
+#define AX_LV2_HAS_TELEMETRY 1
+#endif
+#endif
 
-    std::size_t push_interleaved(const float* stereo_interleaved, std::size_t frames) noexcept {
-        std::size_t w = write_idx_.load(std::memory_order_relaxed);
-        const std::size_t r = read_idx_.load(std::memory_order_acquire);
-        const std::size_t used = (w >= r) ? (w - r) : (capacity_ + w - r);
-        const std::size_t free_frames = (capacity_ > 1 + used) ? (capacity_ - 1 - used) : 0;
-        const std::size_t to_write = (frames < free_frames) ? frames : free_frames;
-
-        for (std::size_t i = 0; i < to_write; ++i) {
-            const std::size_t slot = ((w + i) % capacity_) * 2;
-            buf_[slot]     = stereo_interleaved[i * 2];
-            buf_[slot + 1] = stereo_interleaved[i * 2 + 1];
-        }
-
-        write_idx_.store((w + to_write) % capacity_, std::memory_order_release);
-        return to_write;
-    }
-
-private:
-    const std::size_t capacity_;
-    std::vector<float> buf_;
-    alignas(64) std::atomic<std::size_t> write_idx_{0};
-    alignas(64) std::atomic<std::size_t> read_idx_{0};
-};
-
-} // namespace ax::audio
+#include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <csignal>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <vector>
 
 namespace {
 
@@ -68,7 +47,8 @@ void handle_signal(int) noexcept {
     g_running.store(false, std::memory_order_release);
 }
 
-bool pin_current_thread_mask(uint64_t cpu_mask) noexcept {
+void pin_thread_mask(std::uint64_t cpu_mask, int fifo_prio = 0) noexcept {
+#if !defined(_WIN32)
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     for (int cpu = 0; cpu < 64; ++cpu) {
@@ -76,30 +56,91 @@ bool pin_current_thread_mask(uint64_t cpu_mask) noexcept {
             CPU_SET(cpu, &cpuset);
         }
     }
-    return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset) == 0;
+    (void)::pthread_setaffinity_np(::pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (fifo_prio > 0) {
+        sched_param sp{};
+        sp.sched_priority = fifo_prio;
+        (void)::pthread_setschedparam(::pthread_self(), SCHED_FIFO, &sp);
+    }
+#else
+    (void)cpu_mask;
+    (void)fifo_prio;
+#endif
 }
 
-int acquire_dac_lock(const char* lock_path) noexcept {
-    const int fd = ::open(lock_path, O_CREAT | O_RDWR, 0666);
-    if (fd < 0) {
-        return -1;
-    }
-    if (::flock(fd, LOCK_EX) != 0) {
-        ::close(fd);
-        return -1;
-    }
-    return fd;
-}
+#if defined(AX_LV2_HAS_ALSA)
+class AlsaStereoSink {
+public:
+    ~AlsaStereoSink() noexcept { Close(); }
 
-void release_dac_lock(int fd, const char* lock_path) noexcept {
-    if (fd >= 0) {
-        ::flock(fd, LOCK_UN);
-        ::close(fd);
+    bool Open(const char* device_name, unsigned int sample_rate, unsigned int period_frames) noexcept {
+        Close();
+        if (!device_name || device_name[0] == '\0') {
+            return false;
+        }
+        if (snd_pcm_open(&pcm_, device_name, SND_PCM_STREAM_PLAYBACK, 0) < 0) {
+            pcm_ = nullptr;
+            return false;
+        }
+
+        snd_pcm_hw_params_t* params = nullptr;
+        snd_pcm_hw_params_alloca(&params);
+        unsigned int rate = sample_rate;
+        snd_pcm_uframes_t period = period_frames;
+        snd_pcm_uframes_t buffer = period * 4U;
+        int dir = 0;
+
+        if (snd_pcm_hw_params_any(pcm_, params) < 0 ||
+            snd_pcm_hw_params_set_rate_resample(pcm_, params, 0) < 0 ||
+            snd_pcm_hw_params_set_access(pcm_, params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0 ||
+            snd_pcm_hw_params_set_format(pcm_, params, SND_PCM_FORMAT_S32_LE) < 0 ||
+            snd_pcm_hw_params_set_channels(pcm_, params, 2) < 0 ||
+            snd_pcm_hw_params_set_rate_near(pcm_, params, &rate, &dir) < 0 ||
+            snd_pcm_hw_params_set_period_size_near(pcm_, params, &period, &dir) < 0 ||
+            snd_pcm_hw_params_set_buffer_size_near(pcm_, params, &buffer) < 0 ||
+            snd_pcm_hw_params(pcm_, params) < 0 ||
+            snd_pcm_prepare(pcm_) < 0) {
+            Close();
+            return false;
+        }
+        return true;
     }
-    if (lock_path) {
-        ::unlink(lock_path);
+
+    bool WriteFrames(const std::int32_t* interleaved_s32, std::size_t frames) noexcept {
+        if (!pcm_) return false;
+        std::size_t offset = 0U;
+        while (offset < frames && g_running.load(std::memory_order_acquire)) {
+            const snd_pcm_sframes_t written =
+                snd_pcm_writei(pcm_, interleaved_s32 + offset * 2U, frames - offset);
+            if (written >= 0) {
+                offset += static_cast<std::size_t>(written);
+            } else if (written == -EAGAIN || written == -EINTR) {
+                (void)snd_pcm_wait(pcm_, 2);
+            } else if (written == -EPIPE) {
+                ++xruns_;
+                if (snd_pcm_recover(pcm_, static_cast<int>(written), 1) < 0) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        return true;
     }
-}
+
+    void Close() noexcept {
+        if (pcm_) {
+            (void)snd_pcm_drain(pcm_);
+            (void)snd_pcm_close(pcm_);
+            pcm_ = nullptr;
+        }
+    }
+
+private:
+    snd_pcm_t* pcm_{nullptr};
+    std::uint64_t xruns_{0ULL};
+};
+#endif
 
 struct UridMap {
     LV2_URID midi_event = 0;
@@ -110,7 +151,6 @@ struct UridMap {
         if (!self || !uri) return 0;
         if (std::strcmp(uri, LV2_MIDI__MidiEvent) == 0) return self->midi_event;
         if (std::strcmp(uri, LV2_ATOM__Sequence) == 0) return self->atom_sequence;
-        // Extend with a pre-allocated table if needed; avoid dynamic allocation in RT code.
         return 0;
     }
 };
@@ -136,24 +176,34 @@ struct PortBindings {
 
 int main(int argc, char** argv) {
     if (argc < 2) {
-        std::fprintf(stderr, "Usage: %s <plugin-uri> [sample-rate] [period-frames]\n", argv[0]);
+        std::fprintf(stderr, "Usage: %s <plugin-uri> [sample-rate] [period-frames] [--device <alsa_dev>] [--no-alsa]\n", argv[0]);
         return 1;
     }
 
     const char* plugin_uri_str = argv[1];
-    const double sample_rate = (argc >= 3) ? std::atof(argv[2]) : 48000.0;
-    const uint32_t period_frames = (argc >= 4) ? static_cast<uint32_t>(std::strtoul(argv[3], nullptr, 10)) : 96U;
+    const double sample_rate = (argc >= 3 && argv[2][0] != '-') ? std::atof(argv[2]) : 48000.0;
+    const uint32_t period_frames =
+        (argc >= 4 && argv[3][0] != '-') ? static_cast<uint32_t>(std::strtoul(argv[3], nullptr, 10)) : 96U;
+    std::string alsa_device = "hw:CARD=FC3,DEV=0";
+    bool use_alsa = true;
 
-    ::signal(SIGINT, handle_signal);
-    ::signal(SIGTERM, handle_signal);
+    for (int i = 2; i < argc; ++i) {
+        const std::string_view arg = argv[i];
+        if (arg == "--device" && i + 1 < argc) {
+            alsa_device = argv[++i];
+        } else if (arg == "--no-alsa") {
+            use_alsa = false;
+        }
+    }
 
-    // Pin host/DSP thread to Cores 2-4 (0x1C) on i5-9600K topology.
-    pin_current_thread_mask(0x1CULL);
+    std::signal(SIGINT, handle_signal);
+    std::signal(SIGTERM, handle_signal);
 
-    constexpr const char* kDacLockPath = "/run/lock/ax-dac.lock";
-    const int dac_lock_fd = acquire_dac_lock(kDacLockPath);
-    if (dac_lock_fd < 0) {
-        std::fprintf(stderr, "Failed acquiring %s\n", kDacLockPath);
+    pin_thread_mask(0x1CULL, 0);
+
+    flac_ax::audio::ScopedDacLock dac_lock;
+    if (!dac_lock.Acquire("/run/lock/ax-dac.lock", false)) {
+        std::fprintf(stderr, "Failed acquiring /run/lock/ax-dac.lock\n");
         return 1;
     }
 
@@ -167,7 +217,6 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "LV2 plugin not found: %s\n", plugin_uri_str);
         lilv_node_free(plugin_uri);
         lilv_world_free(world);
-        release_dac_lock(dac_lock_fd, kDacLockPath);
         return 1;
     }
 
@@ -184,7 +233,6 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Failed instantiating LV2 plugin: %s\n", plugin_uri_str);
         lilv_node_free(plugin_uri);
         lilv_world_free(world);
-        release_dac_lock(dac_lock_fd, kDacLockPath);
         return 1;
     }
 
@@ -250,21 +298,61 @@ int main(int argc, char** argv) {
         }
     }
 
-    ax::audio::LockFreeStereoRing ring(period_frames * 32);
-    std::vector<float> interleaved(period_frames * 2, 0.0f);
+    flac_ax::audio::StereoFloatRing ring(period_frames * 64U);
+    std::vector<float> interleaved(period_frames * 2U, 0.0f);
 
     lilv_instance_activate(instance);
 
-    const auto period_ns = std::chrono::nanoseconds(
-        static_cast<uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
-    auto next_tick = std::chrono::steady_clock::now();
+    std::atomic<bool> sink_done{false};
+    std::thread sink_thread([&]() {
+        pin_thread_mask(0x01ULL, 80);
+#if defined(AX_LV2_HAS_ALSA)
+        AlsaStereoSink alsa_sink;
+        const bool alsa_ready = use_alsa && alsa_sink.Open(
+            alsa_device.c_str(),
+            static_cast<unsigned int>(sample_rate),
+            period_frames);
+#else
+        (void)use_alsa;
+        (void)alsa_device;
+#endif
+        std::vector<float> pop_float(period_frames * 2U, 0.0f);
+        std::vector<std::int32_t> pop_s32(period_frames * 2U, 0);
+        const auto pace_ns = std::chrono::nanoseconds(
+            static_cast<std::uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
 
-    // Hot DSP loop: zero heap allocations, zero blocking mutexes, zero I/O.
+        while (!sink_done.load(std::memory_order_acquire) || ring.AvailableToRead() > 0U) {
+            const std::size_t popped = ring.PopInterleaved(pop_float.data(), period_frames);
+            if (popped == 0U) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                continue;
+            }
+#if defined(AX_LV2_HAS_ALSA)
+            if (alsa_ready) {
+                flac_ax::audio::ConvertStereoFloatToS32(pop_float.data(), pop_s32.data(), popped);
+                if (!alsa_sink.WriteFrames(pop_s32.data(), popped)) {
+                    break;
+                }
+            } else {
+                std::this_thread::sleep_for(pace_ns);
+            }
+#else
+            (void)pop_s32;
+            std::this_thread::sleep_for(pace_ns);
+#endif
+        }
+#if defined(AX_LV2_HAS_ALSA)
+        alsa_sink.Close();
+#endif
+    });
+
     while (g_running.load(std::memory_order_acquire)) {
+#if defined(AX_LV2_HAS_TELEMETRY)
+        const auto t0 = std::chrono::steady_clock::now();
+#endif
         if (ports.midi_in_port >= 0) {
             auto* seq = reinterpret_cast<LV2_Atom_Sequence*>(ports.midi_in_buf.data());
             seq->atom.size = sizeof(LV2_Atom_Sequence_Body);
-            // Drain pre-queued MIDI events from Core 5 into `seq` here without allocating.
         }
 
         lilv_instance_run(instance, period_frames);
@@ -272,14 +360,29 @@ int main(int argc, char** argv) {
         for (uint32_t n = 0; n < period_frames; ++n) {
             const float l = ports.audio_out_l[n];
             const float r = (ports.out_r_port >= 0) ? ports.audio_out_r[n] : l;
-            interleaved[n * 2]     = l;
-            interleaved[n * 2 + 1] = r;
+            interleaved[n * 2U + 0U] = l;
+            interleaved[n * 2U + 1U] = r;
         }
 
-        ring.push_interleaved(interleaved.data(), period_frames);
+        std::size_t pushed = 0U;
+        while (pushed < period_frames && g_running.load(std::memory_order_acquire)) {
+            pushed += ring.PushInterleaved(interleaved.data() + pushed * 2U, period_frames - pushed);
+            if (pushed < period_frames) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        }
 
-        next_tick += period_ns;
-        std::this_thread::sleep_until(next_tick);
+#if defined(AX_LV2_HAS_TELEMETRY)
+        const auto us = static_cast<std::uint32_t>(
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - t0).count());
+        ax::RecordAudioCallbackMetrics(us, period_frames);
+#endif
+    }
+
+    sink_done.store(true, std::memory_order_release);
+    if (sink_thread.joinable()) {
+        sink_thread.join();
     }
 
     lilv_instance_deactivate(instance);
@@ -292,7 +395,5 @@ int main(int argc, char** argv) {
     lilv_node_free(atom_class);
     lilv_node_free(plugin_uri);
     lilv_world_free(world);
-
-    release_dac_lock(dac_lock_fd, kDacLockPath);
     return 0;
 }
