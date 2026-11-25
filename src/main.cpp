@@ -6,6 +6,7 @@
 #include "tracker_openmpt_reader.hpp"
 
 #include <FLAC++/decoder.h>
+#include <FLAC/metadata.h>
 #include <alsa/asoundlib.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -22,6 +23,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
@@ -336,8 +338,8 @@ protected:
                                      : bps_;
         scratch_.resize(block_frames * 2U);
         for (std::size_t i = 0U; i < block_frames; ++i) {
-            const FLAC__int32 l_raw = buffer[i];
-            const FLAC__int32 r_raw = (channels_ >= 2U) ? buffer[i] : l_raw;
+            const FLAC__int32 l_raw = buffer[0][i];
+            const FLAC__int32 r_raw = (channels_ >= 2U) ? buffer[1][i] : l_raw;
             scratch_[i * 2U + 0U] = SampleToS32(l_raw, bps);
             scratch_[i * 2U + 1U] = SampleToS32(r_raw, bps);
         }
@@ -496,6 +498,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    std::vector<std::string> track_strings;
+    track_strings.reserve(tracks.size());
+    for (const auto& t : tracks) {
+        track_strings.push_back(t.string());
+    }
+
     const auto chip_opt = flac_ax::ess::ResolveEssChipHook(chip_spec);
     if (!chip_opt.has_value()) {
         std::cerr << "[FLAC_AX] Unknown --chip profile '" << chip_spec << "'\n";
@@ -547,8 +555,8 @@ int main(int argc, char** argv) {
 
     const auto preload_policy = flac_ax::DetectHostPreloadPolicy();
     std::cout << "[FLAC_AX] Queue: " << tracks.size() << " track(s)"
-              << " | Preload tier: " << flac_ax::ToString(preload_policy.tier)
-              << " (cap=" << (preload_policy.max_preload_bytes / (1024ULL * 1024ULL)) << " MiB)"
+              << " | Preload mode: " << flac_ax::ToString(preload_policy.mode)
+              << " (cap=" << (preload_policy.max_total_bytes / (1024ULL * 1024ULL)) << " MiB)"
               << " | OpenMPT: " << (flac_ax::tracker::OpenMptModuleStreamer::IsSupported() ? "enabled" : "disabled")
               << "\n";
 
@@ -569,7 +577,7 @@ int main(int argc, char** argv) {
 
         for (std::size_t idx = 0U; idx < tracks.size() && g_running.load(std::memory_order_acquire); ++idx) {
             abort_track.store(false, std::memory_order_release);
-            preloader.RefreshWindow(tracks, idx);
+            preloader.RefreshWindow(track_strings, idx);
             const auto& path = tracks[idx];
             const auto* cached = preloader.Find(path);
 
@@ -618,16 +626,35 @@ int main(int argc, char** argv) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 }
 
-                flac_ax::dsd::DsdDopStreamer dsd_stream;
-                const bool opened = cached
-                    ? dsd_stream.OpenFromMemory(cached->bytes.data(), cached->bytes.size())
-                    : dsd_stream.OpenFromFile(path);
-                if (!opened) {
+                flac_ax::dsd::DsdStreamInfo dsd_info{};
+                const bool parsed = cached
+                    ? flac_ax::dsd::ParseDsdMemoryHeader(
+                          cached->bytes.data(),
+                          static_cast<std::uint64_t>(cached->bytes.size()),
+                          dsd_info)
+                    : flac_ax::dsd::ParseDsdFileHeader(path.string(), dsd_info);
+                if (!parsed) {
                     std::cerr << "[FLAC_AX] WARN: Skipping unsupported/unreadable DSD file: " << path.filename() << "\n";
                     continue;
                 }
 
-                const unsigned int dop_rate = dsd_stream.dop_pcm_rate_hz();
+                FILE* disk_fp = nullptr;
+                if (!cached) {
+                    disk_fp = std::fopen(path.c_str(), "rb");
+                    if (!disk_fp) {
+                        std::cerr << "[FLAC_AX] WARN: Failed opening DSD file: " << path.filename() << "\n";
+                        continue;
+                    }
+                }
+
+                flac_ax::dsd::DsdDopStreamer dsd_stream;
+                dsd_stream.Configure(
+                    dsd_info,
+                    cached ? cached->bytes.data() : nullptr,
+                    cached ? static_cast<std::uint64_t>(cached->bytes.size()) : 0ULL,
+                    disk_fp);
+
+                const unsigned int dop_rate = dsd_info.dop_pcm_rate_hz;
                 std::cout << "[FLAC_AX] [DoP DSD] " << path.filename().string()
                           << " @ " << dop_rate << " Hz DoP S32_LE\n";
 
@@ -636,7 +663,7 @@ int main(int argc, char** argv) {
                 format_ready.store(true, std::memory_order_release);
 
                 while (g_running.load(std::memory_order_acquire) && !abort_track.load(std::memory_order_acquire)) {
-                    const std::size_t got = dsd_stream.ReadDopFrames(decode_chunk.data(), 4096U);
+                    const std::size_t got = dsd_stream.ReadDopFramesS32(decode_chunk.data(), 4096U);
                     if (got == 0U) {
                         break;
                     }
@@ -647,6 +674,10 @@ int main(int argc, char** argv) {
                             std::this_thread::sleep_for(std::chrono::milliseconds(2));
                         }
                     }
+                }
+
+                if (disk_fp != nullptr) {
+                    std::fclose(disk_fp);
                 }
             } else {
                 // Probe metadata / stream FLAC
@@ -780,4 +811,3 @@ int main(int argc, char** argv) {
 #endif
     return 0;
 }
-
