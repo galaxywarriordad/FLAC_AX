@@ -97,3 +97,6 @@ inline void ConvertStereoFloatToS32(const float* in_lr,
 }
 
 } // namespace flac_ax::audio
+```[cite: 20]
+
+Once it's in `src/audio/ax_stereo_ring.hpp`, push to `main` and let the workflow run.
