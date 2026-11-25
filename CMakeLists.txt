@@ -24,11 +24,11 @@ if(FLAC_AX_USE_AX_SDK)
         message(STATUS "FLAC_AX: Using local ax-sdk at ${AX_SDK_LOCAL_DIR}")
         add_subdirectory("${AX_SDK_LOCAL_DIR}" "${CMAKE_BINARY_DIR}/_deps/ax_sdk-build" EXCLUDE_FROM_ALL)
     else()
-        message(STATUS "FLAC_AX: Fetching pinned ax-sdk v1_36_2 from GitHub")
+        message(STATUS "FLAC_AX: Fetching ax-sdk from GitHub (main)")
         FetchContent_Declare(
             ax_sdk
             GIT_REPOSITORY https://github.com/galaxywarriordad/ax-sdk.git
-            GIT_TAG v1_36_2
+            GIT_TAG main
             GIT_SHALLOW TRUE
         )
         FetchContent_MakeAvailable(ax_sdk)
