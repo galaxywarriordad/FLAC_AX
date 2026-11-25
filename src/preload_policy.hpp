@@ -264,4 +264,3 @@ private:
 };
 
 } // namespace flac_ax
-```[cite: 30]
