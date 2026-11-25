@@ -1,9 +1,20 @@
-// src/visual/av_hud.cpp — Core 1 GTX 980 Ti VBlank-locked OpenGL HUD implementation
 #include "visual/av_hud.hpp"
 
+#if defined(__has_include)
+#if __has_include(<SDL2/SDL.h>) && __has_include(<SDL2/SDL_opengl.h>)
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#define FLAC_AX_AV_HUD_HAS_SDL2_GL 1
+#elif __has_include(<SDL.h>) && __has_include(<SDL_opengl.h>)
+#include <SDL.h>
+#include <SDL_opengl.h>
+#define FLAC_AX_AV_HUD_HAS_SDL2_GL 1
+#endif
+#endif
+
+#if !defined(_WIN32)
 #include <pthread.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -16,15 +27,20 @@ namespace flac_ax::visual {
 namespace {
 
 void PinHudThread(int core_id) noexcept {
+#if !defined(_WIN32)
     if (core_id < 0) {
         return;
     }
     cpu_set_t set;
     CPU_ZERO(&set);
     CPU_SET(static_cast<unsigned int>(core_id), &set);
-    pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+    (void)::pthread_setaffinity_np(::pthread_self(), sizeof(set), &set);
+#else
+    (void)core_id;
+#endif
 }
 
+#if defined(FLAC_AX_AV_HUD_HAS_SDL2_GL)
 void DrawRect(float x0, float y0, float x1, float y1, float r, float g, float b, float a = 1.0f) noexcept {
     glColor4f(r, g, b, a);
     glBegin(GL_QUADS);
@@ -53,6 +69,7 @@ void DrawLineStripScope(const std::array<float, dsp::VisualSnapshot::kScopeSampl
     }
     glEnd();
 }
+#endif
 
 } // namespace
 
@@ -64,6 +81,7 @@ bool AvStudioHud::Init(int core_id, bool fullscreen) {
     Shutdown();
     PinHudThread(core_id);
 
+#if defined(FLAC_AX_AV_HUD_HAS_SDL2_GL)
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS) != 0) {
         std::fprintf(stderr, "[HUD] SDL_Init failed: %s\n", SDL_GetError());
         return false;
@@ -115,9 +133,14 @@ bool AvStudioHud::Init(int core_id, bool fullscreen) {
     window_ = win;
     gl_ctx_ = ctx;
     return true;
+#else
+    (void)fullscreen;
+    return false;
+#endif
 }
 
 void AvStudioHud::Shutdown() {
+#if defined(FLAC_AX_AV_HUD_HAS_SDL2_GL)
     if (gl_ctx_) {
         SDL_GL_DeleteContext(static_cast<SDL_GLContext>(gl_ctx_));
         gl_ctx_ = nullptr;
@@ -129,11 +152,13 @@ void AvStudioHud::Shutdown() {
     if (SDL_WasInit(SDL_INIT_VIDEO) != 0) {
         SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
     }
+#endif
 }
 
 bool AvStudioHud::RenderFrame(const dsp::VisualSnapshot& snap,
                               const midi::MpkMini3State& mpk,
                               const StudioTelemetry& telem) {
+#if defined(FLAC_AX_AV_HUD_HAS_SDL2_GL)
     auto* win = static_cast<SDL_Window*>(window_);
     if (!win || !gl_ctx_) {
         return false;
@@ -169,7 +194,6 @@ bool AvStudioHud::RenderFrame(const dsp::VisualSnapshot& snap,
     const float pad = 16.0f;
     const float top_h = 28.0f;
 
-    // Top status strip: DAC lock, MPK3 status, active voices & XRUNs
     DrawRect(pad, pad, pad + 14.0f, pad + 14.0f,
              telem.dac_locked ? 0.15f : 0.75f, telem.dac_locked ? 0.85f : 0.20f, 0.30f);
     DrawRect(pad + 24.0f, pad, pad + 38.0f, pad + 14.0f,
@@ -183,7 +207,6 @@ bool AvStudioHud::RenderFrame(const dsp::VisualSnapshot& snap,
         DrawRect(w - pad - 18.0f, pad, w - pad, pad + 14.0f, 0.95f, 0.20f, 0.20f);
     }
 
-    // 64-band FFT spectrum panel
     const float spec_x0 = pad;
     const float spec_y0 = pad + top_h + 8.0f;
     const float spec_w = w - 2.0f * pad;
@@ -202,7 +225,6 @@ bool AvStudioHud::RenderFrame(const dsp::VisualSnapshot& snap,
         DrawRect(bx0, by0, bx0 + bar_w, by1, 0.20f + 0.75f * mag, 0.80f - 0.35f * mag, 0.45f);
     }
 
-    // Lower split: L/R oscilloscope (left) + K1..K8 knobs & 16 pads (right)
     const float bot_y0 = spec_y0 + spec_h + 14.0f;
     const float bot_h = std::max(80.0f, (h - pad) - bot_y0);
     const float half_w = (spec_w - 14.0f) * 0.5f;
@@ -215,7 +237,6 @@ bool AvStudioHud::RenderFrame(const dsp::VisualSnapshot& snap,
     const float right_x0 = spec_x0 + half_w + 14.0f;
     DrawRect(right_x0, bot_y0, right_x0 + half_w, bot_y0 + bot_h, 0.09f, 0.11f, 0.14f);
 
-    // K1..K8 bars
     const float knob_w = std::max(8.0f, (half_w - 24.0f) / 8.0f);
     const float knob_area_h = bot_h * 0.45f;
     for (std::size_t k = 0; k < 8; ++k) {
@@ -226,7 +247,6 @@ bool AvStudioHud::RenderFrame(const dsp::VisualSnapshot& snap,
         DrawRect(kx0 + 2.0f, ky0, kx0 + knob_w - 4.0f, ky1, 0.85f, 0.75f, 0.20f);
     }
 
-    // 16 pad indicators (2 rows x 8 cols)
     const float pad_grid_y0 = bot_y0 + knob_area_h + 22.0f;
     const float pad_cell_h = std::max(10.0f, (bot_y0 + bot_h - 10.0f - pad_grid_y0) * 0.5f - 4.0f);
     for (std::size_t p = 0; p < 16; ++p) {
@@ -241,6 +261,12 @@ bool AvStudioHud::RenderFrame(const dsp::VisualSnapshot& snap,
 
     SDL_GL_SwapWindow(win);
     return true;
+#else
+    (void)snap;
+    (void)mpk;
+    (void)telem;
+    return false;
+#endif
 }
 
 } // namespace flac_ax::visual
