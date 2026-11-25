@@ -7,6 +7,7 @@
 #include "midi/mpk_mini3_oled.hpp"
 #include "visual/av_hud.hpp"
 
+#if !defined(_WIN32)
 #include <alsa/asoundlib.h>
 #include <fcntl.h>
 #include <pthread.h>
@@ -15,6 +16,9 @@
 #include <sys/file.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#else
+#include <csignal>
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -70,6 +74,7 @@ void OnSignal(int /*sig*/) noexcept {
 }
 
 void InstallSignals() noexcept {
+#if !defined(_WIN32)
     struct sigaction sa {};
     sa.sa_handler = OnSignal;
     sigemptyset(&sa.sa_mask);
@@ -77,9 +82,14 @@ void InstallSignals() noexcept {
     sigaction(SIGINT, &sa, nullptr);
     sigaction(SIGTERM, &sa, nullptr);
     sigaction(SIGUSR1, &sa, nullptr); // Yield DAC cleanly when an emulator launches
+#else
+    std::signal(SIGINT, OnSignal);
+    std::signal(SIGTERM, OnSignal);
+#endif
 }
 
 void PinThread(int core_id, int fifo_prio) noexcept {
+#if !defined(_WIN32)
     if (core_id >= 0) {
         cpu_set_t set;
         CPU_ZERO(&set);
@@ -91,8 +101,13 @@ void PinThread(int core_id, int fifo_prio) noexcept {
         sp.sched_priority = fifo_prio;
         pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp);
     }
+#else
+    (void)core_id;
+    (void)fifo_prio;
+#endif
 }
 
+#if !defined(_WIN32)
 bool ConfigureStudioAlsa(snd_pcm_t* pcm,
                          const flac_ax::ess::EssChipProfile& chip,
                          unsigned int target_rate_hz,
@@ -126,6 +141,7 @@ bool ConfigureStudioAlsa(snd_pcm_t* pcm,
     out_period = period;
     return flac_ax::ess::OnEssHardwareConfigured(chip, pcm, out_rate, out_period);
 }
+#endif
 
 void PrintUsage() {
     std::cerr << "Usage: ax_av_studio [options]\n"
@@ -197,9 +213,25 @@ int main(int argc, char** argv) {
         }
     }
 
+    InstallSignals();
+
+#if defined(_WIN32)
+    (void)fullscreen;
+    (void)headless;
+    (void)has_volume;
+    (void)target_volume;
+    (void)device_override;
+    (void)mixer_card;
+    (void)midi_override;
+    (void)record_wav_path;
+    (void)record_bits;
+    (void)sample_rate;
+    (void)period_frames_u32;
+    std::cout << "[STUDIO] Windows build mode: ALSA/DAC lock/HUD hardware path skipped (use Linux/Piccolo-AX for hardware I/O)\n";
+    return 0;
+#else
     const auto period_frames = static_cast<snd_pcm_uframes_t>(period_frames_u32);
 
-    InstallSignals();
     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
         std::cerr << "[STUDIO] WARN: mlockall skipped (check CAP_IPC_LOCK / RLIMIT_MEMLOCK)\n";
     }
@@ -406,5 +438,5 @@ int main(int argc, char** argv) {
     ax::ShutdownTelemetryShm();
 #endif
     return 0;
+#endif
 }
-
