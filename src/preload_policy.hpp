@@ -1,4 +1,3 @@
-// src/preload_policy.hpp — Host RAM detection and preload window policy for FLAC_AX
 #pragma once
 
 #include <fcntl.h>
@@ -9,7 +8,6 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
 #include <fstream>
 #include <limits>
 #include <string>
@@ -20,9 +18,9 @@
 namespace flac_ax {
 
 enum class PreloadMode {
-    SingleFile,   // < ~6.5 GiB tier fallback (64 MiB cap on <= 1.5 GiB handhelds, 512 MiB on > 1.5 GiB)
-    Window3Files, // ~8 GiB RAM: preload up to 3 files at a time
-    WholeAlbum    // >= 16 GiB RAM: preload whole album into RAM
+    SingleFile,
+    Window3Files,
+    WholeAlbum
 };
 
 inline constexpr const char* ToString(PreloadMode mode) noexcept {
@@ -97,7 +95,6 @@ inline PreloadPolicy EvaluatePreloadPolicy(
         }
         policy.max_total_bytes = static_cast<std::size_t>(2ULL * kGiB);
     } else if (mem_total_bytes > 0 && mem_total_bytes <= kEmbeddedHandheldMax) {
-        // <= 1.5 GiB embedded / handheld boards (e.g., RK3326 BATLEXP G350 / R36S 1 GB LPDDR3)
         policy.mode = PreloadMode::SingleFile;
         policy.max_window_files = 1;
         policy.max_total_bytes = static_cast<std::size_t>(64ULL * kMiB);
@@ -147,7 +144,6 @@ public:
             keep_set.insert(album_files[i]);
         }
 
-        // Evict entries outside [current_index, target_end) in O(N)
         std::size_t write_idx = 0;
         for (std::size_t read_idx = 0; read_idx < entries_.size(); ++read_idx) {
             if (keep_set.find(entries_[read_idx].path) != keep_set.end()) {
@@ -189,10 +185,6 @@ public:
             }
         }
         return nullptr;
-    }
-
-    const Entry* Find(const std::filesystem::path& path) const {
-        return Find(path.string());
     }
 
     std::size_t CachedFileCount() const noexcept { return entries_.size(); }
