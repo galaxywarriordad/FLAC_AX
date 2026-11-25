@@ -1,5 +1,7 @@
 // src/main.cpp — Deterministic Bit-Perfect ESS Sabre FLAC, DoP (DSD) & Tracker Module Transport
 // Topology: Core 5 (RamFilePreloader + FLAC/DSD/OpenMPT Decoder) -> SPSC Ring -> Core 0 (SCHED_FIFO 80 ALSA S32_LE)
+#include "audio/ax_dac_lock.hpp"
+#include "audio/ax_stereo_ring.hpp"
 #include "dsd_dop_reader.hpp"
 #include "ess_dac_hooks.hpp"
 #include "preload_policy.hpp"
@@ -9,11 +11,9 @@
 #include <FLAC++/decoder.h>
 #include <FLAC/metadata.h>
 #include <alsa/asoundlib.h>
-#include <fcntl.h>
 #include <pthread.h>
 #include <sched.h>
 #include <signal.h>
-#include <sys/file.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #define FLAC_AX_MAIN_HAS_FLAC_AND_ALSA 1
@@ -181,61 +181,6 @@ struct StreamFormatSpec {
     std::string label;
 };
 
-class StereoFrameRing {
-public:
-    static constexpr std::size_t kCapacityFrames = 262144U;
-    static constexpr std::size_t kCapacityMask   = kCapacityFrames - 1U;
-
-    StereoFrameRing() : storage_(kCapacityFrames * 2U, 0) {}
-
-    void Reset() noexcept {
-        write_idx_.store(0ULL, std::memory_order_relaxed);
-        read_idx_.store(0ULL, std::memory_order_relaxed);
-    }
-
-    std::size_t AvailableToRead() const noexcept {
-        const std::uint64_t w = write_idx_.load(std::memory_order_acquire);
-        const std::uint64_t r = read_idx_.load(std::memory_order_relaxed);
-        return static_cast<std::size_t>(w - r);
-    }
-
-    std::size_t AvailableToWrite() const noexcept {
-        const std::uint64_t r = read_idx_.load(std::memory_order_acquire);
-        const std::uint64_t w = write_idx_.load(std::memory_order_relaxed);
-        const std::size_t used = static_cast<std::size_t>(w - r);
-        return (used < kCapacityFrames) ? (kCapacityFrames - used) : 0U;
-    }
-
-    std::size_t Push(const std::int32_t* interleaved_lr, std::size_t frames) noexcept {
-        const std::size_t can_write = std::min(frames, AvailableToWrite());
-        const std::uint64_t w = write_idx_.load(std::memory_order_relaxed);
-        for (std::size_t i = 0U; i < can_write; ++i) {
-            const std::size_t slot = static_cast<std::size_t>((w + i) & kCapacityMask) * 2U;
-            storage_[slot + 0U] = interleaved_lr[i * 2U + 0U];
-            storage_[slot + 1U] = interleaved_lr[i * 2U + 1U];
-        }
-        write_idx_.store(w + can_write, std::memory_order_release);
-        return can_write;
-    }
-
-    std::size_t Pop(std::int32_t* out_lr, std::size_t max_frames) noexcept {
-        const std::size_t can_read = std::min(max_frames, AvailableToRead());
-        const std::uint64_t r = read_idx_.load(std::memory_order_relaxed);
-        for (std::size_t i = 0U; i < can_read; ++i) {
-            const std::size_t slot = static_cast<std::size_t>((r + i) & kCapacityMask) * 2U;
-            out_lr[i * 2U + 0U] = storage_[slot + 0U];
-            out_lr[i * 2U + 1U] = storage_[slot + 1U];
-        }
-        read_idx_.store(r + can_read, std::memory_order_release);
-        return can_read;
-    }
-
-private:
-    alignas(64) std::atomic<std::uint64_t> write_idx_{0ULL};
-    alignas(64) std::atomic<std::uint64_t> read_idx_{0ULL};
-    std::vector<std::int32_t> storage_;
-};
-
 inline std::int32_t SampleToS32(FLAC__int32 sample, unsigned int bps) noexcept {
     if (bps >= 32U) {
         return static_cast<std::int32_t>(sample);
@@ -246,7 +191,7 @@ inline std::int32_t SampleToS32(FLAC__int32 sample, unsigned int bps) noexcept {
 
 class FlacStreamDecoder final : public FLAC::Decoder::Stream {
 public:
-    FlacStreamDecoder(StereoFrameRing& ring,
+    FlacStreamDecoder(flac_ax::audio::StereoFrameRing32& ring,
                       const std::atomic<bool>& running,
                       const std::atomic<bool>& abort_track) noexcept
         : ring_(ring), running_(running), abort_track_(abort_track) {}
@@ -370,7 +315,7 @@ protected:
         while (pushed < block_frames &&
                running_.load(std::memory_order_acquire) &&
                !abort_track_.load(std::memory_order_acquire)) {
-            pushed += ring_.Push(scratch_.data() + pushed * 2U, block_frames - pushed);
+            pushed += ring_.PushInterleaved(scratch_.data() + pushed * 2U, block_frames - pushed);
             if (pushed < block_frames) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
@@ -381,7 +326,7 @@ protected:
     void error_callback(FLAC__StreamDecoderErrorStatus /*status*/) override {}
 
 private:
-    StereoFrameRing& ring_;
+    flac_ax::audio::StereoFrameRing32& ring_;
     const std::atomic<bool>& running_;
     const std::atomic<bool>& abort_track_;
 
@@ -553,14 +498,9 @@ int main(int argc, char** argv) {
         std::cerr << "[FLAC_AX] WARN: mlockall skipped (check CAP_IPC_LOCK / RLIMIT_MEMLOCK)\n";
     }
 
-    const int lock_fd = ::open("/run/lock/ax-dac.lock", O_CREAT | O_RDWR | O_CLOEXEC, 0666);
-    if (lock_fd < 0) {
-        std::cerr << "[FLAC_AX] Failed to open /run/lock/ax-dac.lock\n";
-        return 1;
-    }
-    if (::flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
+    flac_ax::audio::ScopedDacLock dac_lock;
+    if (!dac_lock.Acquire("/run/lock/ax-dac.lock", true)) {
         std::cerr << "[FLAC_AX] DAC lock busy (/run/lock/ax-dac.lock held by another process)\n";
-        ::close(lock_fd);
         return 1;
     }
 
@@ -584,8 +524,6 @@ int main(int argc, char** argv) {
 #if defined(FLAC_AX_HAVE_SDK_TELEMETRY)
         ax::ShutdownTelemetryShm();
 #endif
-        (void)::flock(lock_fd, LOCK_UN);
-        ::close(lock_fd);
         return 1;
     }
 
@@ -596,7 +534,7 @@ int main(int argc, char** argv) {
               << " | OpenMPT: " << (flac_ax::tracker::OpenMptModuleStreamer::IsSupported() ? "enabled" : "disabled")
               << "\n";
 
-    StereoFrameRing ring;
+    flac_ax::audio::StereoFrameRing32 ring;
     std::atomic<bool> abort_track{false};
     std::atomic<bool> playlist_done{false};
     std::atomic<bool> format_ready{false};
@@ -648,7 +586,7 @@ int main(int argc, char** argv) {
                     }
                     std::size_t pushed = 0U;
                     while (pushed < got && g_running.load(std::memory_order_acquire)) {
-                        pushed += ring.Push(decode_chunk.data() + pushed * 2U, got - pushed);
+                        pushed += ring.PushInterleaved(decode_chunk.data() + pushed * 2U, got - pushed);
                         if (pushed < got) {
                             std::this_thread::sleep_for(std::chrono::milliseconds(2));
                         }
@@ -703,7 +641,7 @@ int main(int argc, char** argv) {
                     }
                     std::size_t pushed = 0U;
                     while (pushed < got && g_running.load(std::memory_order_acquire)) {
-                        pushed += ring.Push(decode_chunk.data() + pushed * 2U, got - pushed);
+                        pushed += ring.PushInterleaved(decode_chunk.data() + pushed * 2U, got - pushed);
                         if (pushed < got) {
                             std::this_thread::sleep_for(std::chrono::milliseconds(2));
                         }
@@ -792,7 +730,7 @@ int main(int argc, char** argv) {
         const auto t0 = std::chrono::steady_clock::now();
 #endif
         const std::size_t to_pop = std::min<std::size_t>(avail, actual_period);
-        const std::size_t popped = ring.Pop(period_buf.data(), to_pop);
+        const std::size_t popped = ring.PopInterleaved(period_buf.data(), to_pop);
         if (popped < actual_period) {
             std::fill(period_buf.begin() + popped * 2U, period_buf.end(), 0);
         }
@@ -834,12 +772,8 @@ int main(int argc, char** argv) {
     (void)snd_pcm_close(pcm);
     hw_mixer.Close();
 
-    (void)::flock(lock_fd, LOCK_UN);
-    ::close(lock_fd);
-
 #if defined(FLAC_AX_HAVE_SDK_TELEMETRY)
     ax::ShutdownTelemetryShm();
 #endif
     return 0;
 #endif
-}
