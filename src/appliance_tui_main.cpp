@@ -112,25 +112,3 @@ int main() {
 
     return 0;
 }
-```[cite: 16]
-
-### Verification Steps
-
-<Steps>
-  <Step subtitle="1 min" title="Commit Updated appliance_tui_main.cpp in Browser">
-    Open `src/appliance_tui_main.cpp` in `galaxywarriordad/FLAC_AX`, replace its contents with the code above, and click **Commit changes...** to `main`.
-    *Verification:* The file view on `main` shows `#include "tui/appliance_tui.hpp"` on line 1.
-  </Step>
-  <Step subtitle="1 min" title="Check Configure & Build in GitHub Actions">
-    Open the newly triggered workflow run on `main` and expand **Configure & Build (Release, Clang)** to confirm `ax_appliance_tui` compiles past line 1.
-    *Verification:* `CMakeFiles/ax_appliance_tui.dir/src/appliance_tui_main.cpp.o` builds without `appliance_tui.hpp: No such file or directory`.
-  </Step>
-</Steps>
-
-For a quick refresher on CMake target include directories and out-of-tree header paths, watch [CMake Tutorial - Target Include Directories](https://www.youtube.com/watch?v=r1b_6w1z7lU).
-
-<ElicitationsGroup message="What happens once appliance_tui_main.cpp is committed?">
-  <Elicitation label="ax_appliance_tui compiles now" query="ax_appliance_tui compiled cleanly—what is the next error or step?"/>
-  <Elicitation label="Another target fails" query="The build moved past ax_appliance_tui and failed on another target. Let me share the log."/>
-  <Elicitation label="Wire CLAP headers next" query="Let's wire clap/clap.h for ax_clap_host next."/>
-</ElicitationsGroup>
