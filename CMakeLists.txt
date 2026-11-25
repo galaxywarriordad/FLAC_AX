@@ -217,13 +217,30 @@ if(FLAC_AX_BUILD_LV2_HOST AND UNIX AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/h
     endif()
 endif()
 
-if(FLAC_AX_BUILD_CLAP_HOST AND UNIX AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/ax_clap_host.cpp")
+if(FLAC_AX_BUILD_CLAP_HOST AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/hosts/ax_clap_host.cpp")
     find_path(CLAP_HEADER_DIR NAMES clap/clap.h)
+    if(NOT CLAP_HEADER_DIR)
+        include(FetchContent)
+        FetchContent_Declare(
+            clap_headers
+            GIT_REPOSITORY https://github.com/free-audio/clap.git
+            GIT_TAG main
+            GIT_SHALLOW TRUE
+        )
+        FetchContent_GetProperties(clap_headers)
+        if(NOT clap_headers_POPULATED)
+            FetchContent_Populate(clap_headers)
+        endif()
+        if(EXISTS "${clap_headers_SOURCE_DIR}/include/clap/clap.h")
+            set(CLAP_HEADER_DIR "${clap_headers_SOURCE_DIR}/include")
+        endif()
+    endif()
+
     if(CLAP_HEADER_DIR)
         add_executable(ax_clap_host src/hosts/ax_clap_host.cpp)
         target_include_directories(ax_clap_host PRIVATE "${CLAP_HEADER_DIR}")
         flac_ax_configure_target(ax_clap_host)
-        message(STATUS "FLAC_AX: Configured ax_clap_host target")
+        message(STATUS "FLAC_AX: Configured ax_clap_host target using ${CLAP_HEADER_DIR}")
     else()
         message(STATUS "FLAC_AX: clap/clap.h not found; skipping ax_clap_host")
     endif()
