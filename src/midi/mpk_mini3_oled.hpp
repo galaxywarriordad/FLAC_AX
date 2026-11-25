@@ -1,12 +1,14 @@
-// src/midi/mpk_mini3_oled.hpp — Off-RT rate-limited SysEx / parameter feedback for MPK Mini MK3 K1..K8
 #pragma once
 
+#if !defined(_WIN32)
 #include <alsa/asoundlib.h>
+#endif
 
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -15,7 +17,6 @@
 
 namespace flac_ax::midi {
 
-// Default K1..K8 assignments in FLAC_AX (CC 70..77)
 inline constexpr std::array<std::string_view, 8> kDefaultKnobLabels{
     "Cutoff",
     "Resonance",
@@ -27,11 +28,10 @@ inline constexpr std::array<std::string_view, 8> kDefaultKnobLabels{
     "Master Gain"
 };
 
-// Optional hook to format a custom 16-char max label + value string for SysEx templates
-// (Akai MPK Mini MK3 Q-Link knob names are capped at 16 bytes in preset SysEx payloads).
 inline std::string FormatKnobOledLabel(std::size_t knob_idx,
                                         std::string_view param_name,
                                         std::uint8_t value_0_127) {
+    (void)knob_idx;
     char buf[24]{};
     const int pct = static_cast<int>((static_cast<unsigned int>(value_0_127) * 100U + 63U) / 127U);
     std::snprintf(buf, sizeof(buf), "%.*s %d%%",
@@ -74,7 +74,6 @@ public:
         }
     }
 
-    // Lock-free / wait-free producer call: records latest value for knob_idx (0..7 => K1..K8).
     void NotifyKnobValue(std::size_t knob_idx, std::uint8_t value_0_127) noexcept {
         if (knob_idx >= kNumKnobs) {
             return;
@@ -83,9 +82,12 @@ public:
         dirty_[knob_idx].store(true, std::memory_order_release);
     }
 
-    // Call ONLY from an off-RT thread (e.g., Core 1 HUD loop or background UI worker).
     void PollAndFlush(const std::string& rawmidi_device,
                       std::chrono::milliseconds min_interval = std::chrono::milliseconds(45)) {
+#if defined(_WIN32)
+        (void)rawmidi_device;
+        (void)min_interval;
+#else
         const auto now = std::chrono::steady_clock::now();
 
         for (std::size_t i = 0; i < kNumKnobs; ++i) {
@@ -101,15 +103,12 @@ public:
                 continue;
             }
             if ((now - last_send_tp_[i]) < min_interval) {
-                // Re-mark dirty so the newest value is sent once the throttle window passes
                 pending_val_[i].store(val, std::memory_order_relaxed);
                 dirty_[i].store(true, std::memory_order_release);
                 continue;
             }
 
             if (EnsureOpen(rawmidi_device)) {
-                // Standard F0 ... F7 framing for any custom SysEx template you attach;
-                // no-op safely if no raw SysEx template bytes are configured yet.
                 if (!sysex_template_.empty() &&
                     sysex_template_.front() == 0xF0U &&
                     sysex_template_.back() == 0xF7U) {
@@ -121,22 +120,25 @@ public:
             last_sent_val_[i].store(val, std::memory_order_relaxed);
             last_send_tp_[i] = now;
         }
+#endif
     }
 
-    // Optional: store a captured/verified F0..F7 SysEx packet for your MPK Mini MK3 firmware/preset
     void SetSysExTemplate(std::vector<std::uint8_t> packet) {
         sysex_template_ = std::move(packet);
     }
 
     void Close() noexcept {
+#if !defined(_WIN32)
         if (midi_out_ != nullptr) {
             snd_rawmidi_close(midi_out_);
             midi_out_ = nullptr;
         }
+#endif
         opened_device_.clear();
     }
 
 private:
+#if !defined(_WIN32)
     bool EnsureOpen(const std::string& rawmidi_device) {
         if (rawmidi_device.empty()) {
             return false;
@@ -152,6 +154,7 @@ private:
         opened_device_ = rawmidi_device;
         return true;
     }
+#endif
 
     std::array<std::string, kNumKnobs> labels_{};
     std::array<std::atomic<std::uint8_t>, kNumKnobs> last_sent_val_{};
@@ -160,7 +163,9 @@ private:
     std::array<std::chrono::steady_clock::time_point, kNumKnobs> last_send_tp_{};
 
     std::vector<std::uint8_t> sysex_template_;
+#if !defined(_WIN32)
     snd_rawmidi_t* midi_out_{nullptr};
+#endif
     std::string opened_device_;
 };
 
