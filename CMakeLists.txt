@@ -80,8 +80,12 @@ function(flac_ax_configure_target target_name)
     target_compile_features("${target_name}" PRIVATE cxx_std_20)
     target_include_directories("${target_name}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
     if(FLAC_AX_ENABLE_WARNINGS)
-        if(MSVC AND NOT CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
-            target_compile_options("${target_name}" PRIVATE /W4)
+        if(MSVC OR CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+            if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+                target_compile_options("${target_name}" PRIVATE /W4 /clang:-Wno-c++98-compat)
+            else()
+                target_compile_options("${target_name}" PRIVATE /W4)
+            endif()
         else()
             target_compile_options("${target_name}" PRIVATE -Wall -Wextra -Wpedantic)
         endif()
@@ -216,3 +220,6 @@ if(FLAC_AX_BUILD_CLAP_HOST AND UNIX AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/
         message(STATUS "FLAC_AX: clap/clap.h not found; skipping ax_clap_host")
     endif()
 endif()
+```[cite: 27, 28]
+
+Commit both updates to `main` and re-run **Build Release Artifacts** (`build-release.yml`) to verify `build-windows` alongside `build-linux`[cite: 24, 25].
