@@ -3,6 +3,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -10,7 +11,6 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sched.h>
-#include <signal.h>
 #include <sys/file.h>
 #include <thread>
 #include <unistd.h>
@@ -144,8 +144,8 @@ int main(int argc, char** argv) {
     const double sample_rate = (argc >= 3) ? std::atof(argv[2]) : 48000.0;
     const uint32_t period_frames = (argc >= 4) ? static_cast<uint32_t>(std::strtoul(argv[3], nullptr, 10)) : 96U;
 
-    std::signal(SIGINT, handle_signal);
-    std::signal(SIGTERM, handle_signal);
+    ::signal(SIGINT, handle_signal);
+    ::signal(SIGTERM, handle_signal);
 
     // Pin host/DSP thread to Cores 2-4 (0x1C) on i5-9600K topology.
     pin_current_thread_mask(0x1CULL);
@@ -188,11 +188,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const LilvNode* audio_class = lilv_new_uri(world, LV2_CORE__AudioPort);
-    const LilvNode* control_class = lilv_new_uri(world, LV2_CORE__ControlPort);
-    const LilvNode* input_class = lilv_new_uri(world, LV2_CORE__InputPort);
-    const LilvNode* output_class = lilv_new_uri(world, LV2_CORE__OutputPort);
-    const LilvNode* atom_class = lilv_new_uri(world, LV2_ATOM__AtomPort);
+    LilvNode* audio_class = lilv_new_uri(world, LV2_CORE__AudioPort);
+    LilvNode* control_class = lilv_new_uri(world, LV2_CORE__ControlPort);
+    LilvNode* input_class = lilv_new_uri(world, LV2_CORE__InputPort);
+    LilvNode* output_class = lilv_new_uri(world, LV2_CORE__OutputPort);
+    LilvNode* atom_class = lilv_new_uri(world, LV2_ATOM__AtomPort);
 
     PortBindings ports{};
     ports.num_ports = lilv_plugin_get_num_ports(plugin);
