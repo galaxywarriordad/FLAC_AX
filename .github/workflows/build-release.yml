@@ -20,7 +20,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang lld cmake ninja-build pkg-config \
-            libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev
+            libflac++-dev libasound2-dev libopenmpt-dev libsdl2-dev libgl1-mesa-dev \
+            liblilv-dev lv2-dev
 
       - name: Configure & Build (Release + LTO, Clang)
         run: |
@@ -33,20 +34,24 @@ jobs:
             -DFLAC_AX_BUILD_UPSCALER=ON \
             -DFLAC_AX_BUILD_APPLIANCE_TUI=ON \
             -DFLAC_AX_BUILD_ENCODE_2GO=ON \
+            -DFLAC_AX_BUILD_LV2_HOST=ON \
+            -DFLAC_AX_BUILD_CLAP_HOST=ON \
             -DFLAC_AX_ENABLE_NATIVE_OPT=${{ inputs.skylake_arch }} \
             -DFLAC_AX_ENABLE_LTO=ON
-          ninja -C build -j"$(nproc)"
-          strip build/flac_ax build/ax_av_studio build/ax_video_upscaler build/ax_appliance_tui
+          ninja -C build -j 4
+          for bin in flac_ax ax_av_studio ax_video_upscaler ax_appliance_tui ax_lv2_host ax_clap_host; do
+            if [ -x "build/$bin" ]; then strip "build/$bin"; fi
+          done
+          mkdir -p release-artifacts/linux
+          for bin in flac_ax ax_av_studio ax_video_upscaler ax_appliance_tui ax_lv2_host ax_clap_host; do
+            if [ -f "build/$bin" ]; then cp "build/$bin" release-artifacts/linux/; fi
+          done
 
       - name: Upload Linux Release Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: flac-ax-linux-x86_64
-          path: |
-            build/flac_ax
-            build/ax_av_studio
-            build/ax_video_upscaler
-            build/ax_appliance_tui
+          path: release-artifacts/linux/*
           retention-days: 14
 
   build-windows:
@@ -70,7 +75,7 @@ jobs:
             -DFLAC_AX_BUILD_ENCODE_2GO=ON `
             -DFLAC_AX_ENABLE_NATIVE_OPT=${{ inputs.skylake_arch }} `
             -DFLAC_AX_ENABLE_LTO=ON
-          cmake --build build --config Release --parallel
+          cmake --build build --config Release --parallel 4
 
       - name: Upload Windows Release Artifacts
         uses: actions/upload-artifact@v4
