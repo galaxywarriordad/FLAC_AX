@@ -73,6 +73,7 @@ jobs:
             -DFLAC_AX_BUILD_UPSCALER=ON `
             -DFLAC_AX_BUILD_APPLIANCE_TUI=OFF `
             -DFLAC_AX_BUILD_ENCODE_2GO=ON `
+            -DFLAC_AX_BUILD_CLAP_HOST=ON `
             -DFLAC_AX_ENABLE_NATIVE_OPT=${{ inputs.skylake_arch }} `
             -DFLAC_AX_ENABLE_LTO=ON
           cmake --build build --config Release --parallel 4
@@ -85,4 +86,5 @@ jobs:
             build/flac_ax.exe
             build/ax_av_studio.exe
             build/ax_video_upscaler.exe
+            build/ax_clap_host.exe
           retention-days: 14
