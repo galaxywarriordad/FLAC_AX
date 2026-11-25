@@ -262,7 +262,7 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    static const clap_ext_log host_log_ext{host_log};
+    static const clap_host_log host_log_ext{host_log};
     static HostContext host_ctx{
         clap_host{
             CLAP_VERSION,
