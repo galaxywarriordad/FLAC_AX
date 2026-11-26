@@ -196,16 +196,18 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::signal(SIGINT, handle_signal);
-    std::signal(SIGTERM, handle_signal);
-
-    pin_thread_mask(0x1CULL, 0);
-
-    flac_ax::audio::ScopedDacLock dac_lock;
-    if (!dac_lock.Acquire("/run/lock/ax-dac.lock", false)) {
-        std::fprintf(stderr, "Failed acquiring /run/lock/ax-dac.lock\n");
+    if (sample_rate <= 0.0 || period_frames == 0U) {
+        std::fprintf(stderr, "Invalid sample rate or period frames\n");
         return 1;
     }
+
+    std::signal(SIGINT, handle_signal);
+    std::signal(SIGTERM, handle_signal);
+#if defined(SIGUSR1)
+    std::signal(SIGUSR1, handle_signal);
+#endif
+
+    pin_thread_mask(0x1CULL, 0);
 
     LilvWorld* world = lilv_world_new();
     lilv_world_load_all(world);
@@ -231,6 +233,15 @@ int main(int argc, char** argv) {
     LilvInstance* instance = lilv_plugin_instantiate(plugin, sample_rate, features);
     if (!instance) {
         std::fprintf(stderr, "Failed instantiating LV2 plugin: %s\n", plugin_uri_str);
+        lilv_node_free(plugin_uri);
+        lilv_world_free(world);
+        return 1;
+    }
+
+    flac_ax::audio::ScopedDacLock dac_lock;
+    if (!dac_lock.Acquire("/run/lock/ax-dac.lock", false)) {
+        std::fprintf(stderr, "Failed acquiring /run/lock/ax-dac.lock (err=%d)\n", dac_lock.last_error());
+        lilv_instance_free(instance);
         lilv_node_free(plugin_uri);
         lilv_world_free(world);
         return 1;
@@ -299,6 +310,7 @@ int main(int argc, char** argv) {
     }
 
     flac_ax::audio::StereoFloatRing ring(period_frames * 64U);
+    ring.PrefaultStorage();
     std::vector<float> interleaved(period_frames * 2U, 0.0f);
 
     lilv_instance_activate(instance);
@@ -320,11 +332,13 @@ int main(int argc, char** argv) {
         std::vector<std::int32_t> pop_s32(period_frames * 2U, 0);
         const auto pace_ns = std::chrono::nanoseconds(
             static_cast<std::uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
+        const auto short_wait_ns = std::chrono::nanoseconds(
+            std::max<std::uint64_t>(50000ULL, static_cast<std::uint64_t>(pace_ns.count()) / 4ULL));
 
         while (!sink_done.load(std::memory_order_acquire) || ring.AvailableToRead() > 0U) {
             const std::size_t popped = ring.PopInterleaved(pop_float.data(), period_frames);
             if (popped == 0U) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(short_wait_ns);
                 continue;
             }
 #if defined(AX_LV2_HAS_ALSA)
@@ -345,6 +359,11 @@ int main(int argc, char** argv) {
         alsa_sink.Close();
 #endif
     });
+
+    const auto pace_ns = std::chrono::nanoseconds(
+        static_cast<std::uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
+    const auto full_wait_ns = std::chrono::nanoseconds(
+        std::max<std::uint64_t>(50000ULL, static_cast<std::uint64_t>(pace_ns.count()) / 2ULL));
 
     while (g_running.load(std::memory_order_acquire)) {
 #if defined(AX_LV2_HAS_TELEMETRY)
@@ -368,7 +387,7 @@ int main(int argc, char** argv) {
         while (pushed < period_frames && g_running.load(std::memory_order_acquire)) {
             pushed += ring.PushInterleaved(interleaved.data() + pushed * 2U, period_frames - pushed);
             if (pushed < period_frames) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(full_wait_ns);
             }
         }
 
@@ -385,6 +404,7 @@ int main(int argc, char** argv) {
         sink_thread.join();
     }
 
+    dac_lock.Release();
     lilv_instance_deactivate(instance);
     lilv_instance_free(instance);
 
