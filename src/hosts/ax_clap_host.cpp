@@ -260,14 +260,11 @@ int main(int argc, char** argv) {
 
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);
+#if defined(SIGUSR1)
+    std::signal(SIGUSR1, handle_signal);
+#endif
 
     pin_thread_mask(0x1CULL, 0);
-
-    flac_ax::audio::ScopedDacLock dac_lock;
-    if (!dac_lock.Acquire("/run/lock/ax-dac.lock", false)) {
-        std::fprintf(stderr, "Failed acquiring /run/lock/ax-dac.lock\n");
-        return 1;
-    }
 
     SharedModuleHandle mod;
     if (!mod.open(clap_path)) {
@@ -345,6 +342,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    flac_ax::audio::ScopedDacLock dac_lock;
+    if (!dac_lock.Acquire("/run/lock/ax-dac.lock", false)) {
+        std::fprintf(stderr, "Failed acquiring /run/lock/ax-dac.lock (err=%d)\n", dac_lock.last_error());
+        plugin->destroy(plugin);
+        entry->deinit();
+        mod.close();
+        return 1;
+    }
+
     std::vector<float> in_l(period_frames, 0.0f);
     std::vector<float> in_r(period_frames, 0.0f);
     std::vector<float> out_l(period_frames, 0.0f);
@@ -399,6 +405,7 @@ int main(int argc, char** argv) {
     proc.out_events = &out_events;
 
     flac_ax::audio::StereoFloatRing ring(period_frames * 64U);
+    ring.PrefaultStorage();
     std::vector<float> interleaved(period_frames * 2U, 0.0f);
 
     const bool can_activate = (plugin->activate != nullptr);
@@ -408,6 +415,7 @@ int main(int argc, char** argv) {
 
     if (can_activate && !plugin->activate(plugin, sample_rate, 1U, period_frames)) {
         std::fprintf(stderr, "CLAP plugin activate failed: %s\n", desc->id);
+        dac_lock.Release();
         plugin->destroy(plugin);
         entry->deinit();
         mod.close();
@@ -417,6 +425,7 @@ int main(int argc, char** argv) {
     if (can_start_proc && !plugin->start_processing(plugin)) {
         std::fprintf(stderr, "CLAP plugin start_processing failed: %s\n", desc->id);
         if (can_deactivate) plugin->deactivate(plugin);
+        dac_lock.Release();
         plugin->destroy(plugin);
         entry->deinit();
         mod.close();
@@ -440,11 +449,13 @@ int main(int argc, char** argv) {
         std::vector<std::int32_t> pop_s32(period_frames * 2U, 0);
         const auto pace_ns = std::chrono::nanoseconds(
             static_cast<std::uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
+        const auto short_wait_ns = std::chrono::nanoseconds(
+            std::max<std::uint64_t>(50000ULL, static_cast<std::uint64_t>(pace_ns.count()) / 4ULL));
 
         while (!sink_done.load(std::memory_order_acquire) || ring.AvailableToRead() > 0U) {
             const std::size_t popped = ring.PopInterleaved(pop_float.data(), period_frames);
             if (popped == 0U) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(short_wait_ns);
                 continue;
             }
 #if defined(AX_CLAP_HAS_ALSA)
@@ -466,6 +477,11 @@ int main(int argc, char** argv) {
 #endif
     });
 
+    const auto pace_ns = std::chrono::nanoseconds(
+        static_cast<std::uint64_t>((static_cast<double>(period_frames) * 1e9) / sample_rate));
+    const auto full_wait_ns = std::chrono::nanoseconds(
+        std::max<std::uint64_t>(50000ULL, static_cast<std::uint64_t>(pace_ns.count()) / 2ULL));
+
     std::int64_t sample_clock = 0;
     while (g_running.load(std::memory_order_acquire) && plugin->process != nullptr) {
 #if defined(AX_CLAP_HAS_TELEMETRY)
@@ -484,7 +500,7 @@ int main(int argc, char** argv) {
         while (pushed < period_frames && g_running.load(std::memory_order_acquire)) {
             pushed += ring.PushInterleaved(interleaved.data() + pushed * 2U, period_frames - pushed);
             if (pushed < period_frames) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                std::this_thread::sleep_for(full_wait_ns);
             }
         }
 
@@ -508,6 +524,7 @@ int main(int argc, char** argv) {
     if (can_deactivate) {
         plugin->deactivate(plugin);
     }
+    dac_lock.Release();
     plugin->destroy(plugin);
     entry->deinit();
     mod.close();
