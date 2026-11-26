@@ -24,7 +24,9 @@ public:
     WavBounceRecorder(const WavBounceRecorder&) = delete;
     WavBounceRecorder& operator=(const WavBounceRecorder&) = delete;
 
-    bool Open(const std::string& path, unsigned int sample_rate_hz, unsigned int bit_depth = 24U) {
+    [[nodiscard]] bool Open(const std::string& path,
+                            unsigned int sample_rate_hz,
+                            unsigned int bit_depth = 24U) {
         Close();
         if (path.empty() || sample_rate_hz == 0U) {
             return false;
@@ -154,9 +156,9 @@ public:
         active_.store(false, std::memory_order_release);
     }
 
-    bool is_active() const noexcept { return active_.load(std::memory_order_acquire); }
-    std::uint64_t frames_written() const noexcept { return frames_written_; }
-    std::uint64_t overrun_frames() const noexcept { return overrun_frames_.load(std::memory_order_relaxed); }
+    [[nodiscard]] bool is_active() const noexcept { return active_.load(std::memory_order_acquire); }
+    [[nodiscard]] std::uint64_t frames_written() const noexcept { return frames_written_; }
+    [[nodiscard]] std::uint64_t overrun_frames() const noexcept { return overrun_frames_.load(std::memory_order_relaxed); }
 
 private:
     static void WriteU16Le(std::uint8_t* p, std::uint16_t v) noexcept {
