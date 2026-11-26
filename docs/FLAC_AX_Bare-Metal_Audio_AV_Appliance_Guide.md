@@ -1,18 +1,27 @@
-# 🎛️ Piccolo \[AX\] & FLAC\_AX — Complete Bare-Metal Audio, AV & Hardware Master Guide (UK)
+# Piccolo \[AX\] & FLAC\_AX — Complete Bare-Metal Audio, AV & Hardware Master Guide (UK)
 
-**Target System:** Bare-Metal Audio, Realtime Synth (`2.00 ms`), CLAP/LV2 Plugin Hosting & Retro/DVD AV Appliance **Reference `[AX]` Hardware Stack:** HiBy FC3 (`VID 0x32BB`, ESS Sabre `ES9281AC Pro`) \+ Nobsound Q10 Class-D Stereo Amp \+ Wharfedale Diamond 9.0 Speakers & Grado SR325x Open-Back Headphones **Runtime Platform:** Real-Time Linux (`6.12-rt` / `Piccolo [AX]`) & Desktop Linux (`Ubuntu/Kubuntu 24.04+`) \+ Windows 10/11 Build & Fallback **Total System Cost:** **\~£45 – £554** *(Reference Rig: **\~£165 – £188** Speakers / **\~£464 – £487** Complete Speaker \+ Grado Rig; End-to-end latency: **1.5 – 3.0 ms**)*
-
-Pairing **FLAC\_AX** on real-time Linux (`6.12-rt` / `Piccolo [AX]`) with a modular **£29–£35 reference USB-C DAC** (**HiBy FC3** or **TRN Black Pearl**), a compact **Nobsound Class-D stereo amplifier**, and **nearfield British hi-fi speakers** or **open-back headphones/IEMs** transforms an ordinary `x86_64` PC into a deterministic, sub-2 ms bare-metal audio appliance—delivering bit-perfect 32-bit PCM/DSD playback, tracker module playback, CLAP/LV2 plugin hosting, a `2.00 ms` hardware-feel synth workstation, and sample-clock-locked retro/DVD upscaling.
+**Target System:** Bare-Metal Audio, Realtime Synth (`2.00 ms`), CLAP/LV2 Plugin Hosting & Retro/DVD AV Appliance  
+**Reference `[AX]` Hardware Stack:** HiBy FC3 (`VID 0x32BB`, ESS Sabre `ES9281AC Pro`) \+ Nobsound Q10 Class-D Stereo Amp \+ Wharfedale Diamond 9.0 Speakers & Grado SR325x Open-Back Headphones  
+**Runtime Platform:** Real-Time Linux (`6.12-rt` / `Piccolo [AX]`) & Desktop Linux (`Ubuntu/Kubuntu 24.04+`) \+ Windows 10/11 Build & Fallback  
+**Total System Cost:** **`~£45 – £554`** *(Reference Rig: **`~£165 – £188`** Speakers / **`~£464 – £487`** Complete Speaker \+ Grado Rig; End-to-end latency: **`1.5 – 3.0 ms`**)*
 
 ---
 
-## 🎯 Section 1: The Modular FLAC\_AX Architecture
+## Deterministic Memory Governance & Read-Only `ax_doctor` Role
 
-### 🚫 The Modern Desktop Audio Trap
+* **Explicit Memory Budgets Over AI/ML Guessing:** RAM preloading (`WholeAlbum` / `Window3Files` / `SingleFile`), `mlockall`, `toram` `/dev/shm` `EROFS` (`< 512 MB`), and `VkVramShield` byte thresholds operate on fixed deterministic rules rather than dynamic AI/ML guessing or background inference daemons that would consume RAM/VRAM or introduce jitter on isolated real-time cores.  
+* **Read-Only `ax_doctor` Pre-Flight Role:** `ax_doctor` acts strictly as an on-demand, read-only diagnostic and pre-flight auditor checking kernel isolation cmdline flags, `MemAvailable` and HugeTLB/zram/toram headroom, IRQ affinity masks, and `/run/lock/ax-dac.lock` / DAC readiness without background polling or silent state mutation.  
+* **Offline Dev/CI Separation:** Any AI or log-parsing tooling stays strictly offline on CPU/RAM outside the target appliance image and outside GPU VRAM.
+
+---
+
+## Section 1: The Modular FLAC\_AX Architecture
+
+### The Modern Desktop Audio Trap
 
 Standard desktop operating systems (Windows 10/11 or stock Linux running PipeWire/PulseAudio) funnel audio through shared software mixers that silently resample streams, apply reduced-precision digital volume attenuation, and introduce `10` to `150+ ms` of buffer and spatial-DSP lag. Meanwhile, built-in motherboard audio chips sit millimetres from GPU VRMs and high-speed PCIe lanes, picking up coil whine, ground noise, and shared USB/SSD interrupt stutters.
 
-### ⚡ The Modular FLAC\_AX Breakthrough
+### The Modular FLAC\_AX Breakthrough
 
 Stripping away the OS audio server and active speaker DSP puts **75% to 85% of your budget** directly into DAC silicon, clean current amplification, and acoustic transducers:
 
@@ -22,7 +31,7 @@ Stripping away the OS audio server and active speaker DSP puts **75% to 85% of y
 4. **The Analog Muscle (Compact `TI TPA3116` Class-D Stereo Amp — Nobsound Q10 / NS-01G Pro, £21–£35):** Because `FLAC_AX` performs bit-perfect 32-bit volume scaling ahead of the DAC, your amplifier needs zero digital inputs, Bluetooth radios, or tone-control DSP chips—acting purely as a `<1 ms` analog current booster powered by a quiet, regulated `19V–20V` laptop PSU (`£0–£12`).  
 5. **The Acoustic Payoff (Passive Nearfield Speakers £99–£149/pair & Wired Headphones/IEMs £16–£299):** With zero spend wasted on bloated multi-hundred-pound integrated amps or wireless modules, your budget goes straight into genuine British nearfield standmounts (**Wharfedale Diamond 9.0** at £99 up to **Wharfedale Diamond 220** at £149) and flagship open-back headphones (**Grado SR325x** at £299) driven straight off the HiBy FC3 at sub-2 ms latency.
 
-### 🎮 Real-Time Appliances & Hosts in One Rig
+### Real-Time Appliances & Hosts in One Rig
 
 | Appliance / Host Mode | Binary / Engine | Key Capability & Hardware Clock Lock |
 | :---- | :---- | :---- |
@@ -32,19 +41,19 @@ Stripping away the OS audio server and active speaker DSP puts **75% to 85% of y
 | **Zero-Drift Retro & DVD Upscaler** | `ax_video_upscaler` | USB 3.0 HDMI capture (`240p` passthrough / `480i/576i` Bob deinterlace via MacroSilicon MS2130S) and OpenGL 3.3 `Y`/`UV` shader DVD upscaling (`720p/1080p/2K`), sample-clock-locked via `AudioMasterPtsSync`. |
 | **Core 5 Espresso Appliance TUI** | `ax_appliance_tui` | Zero-dependency 24-bit ANSI Coffee/Espresso launcher pinned to Core `5` (`0x20`) with live `/run/lock/ax-dac.lock` and RAM telemetry. |
 
-### 📊 System Architecture Comparison
+### System Architecture Comparison
 
 | System Metric | Modular `FLAC_AX` \+ HiBy FC3 \+ Nobsound Q10 Rig | Commercial Soundbars / AV Receivers (£600–£1,200+) |
 | :---- | :---- | :---- |
-| **Total UK System Cost** | **\~£45 – £334** (Headphones) / **\~£156 – £255** (Speakers) | £600 – £1,200+ |
-| **End-to-End Hardware Latency** | **\~1.5 – 2.00 ms** (Headphones) / **\~2.0 – 3.0 ms** (Speakers) | 15 – 150+ ms (HDMI handshakes, room DSP, wireless buffers) |
+| **Total UK System Cost** | **`~£45 – £334`** (Headphones) / **`~£156 – £255`** (Speakers) | £600 – £1,200+ |
+| **End-to-End Hardware Latency** | **`~1.5 – 2.00 ms`** (Headphones) / **`~2.0 – 3.0 ms`** (Speakers) | 15 – 150+ ms (HDMI handshakes, room DSP, wireless buffers) |
 | **Signal Path Purity** | Bit-exact `S32_LE` / native `DoP` from locked RAM to DAC | Resampled OS/HDMI audio \+ mandatory internal DSP |
 | **Stereo Imaging** | True physical speaker triangle (`0.7–1.0 m`) or open-back stage | Narrow bar chassis relying on artificial phase widening |
 | **Longevity & Serviceability** | Passive speakers & wired headphones last `15–25+` years; modular swap | Failed HDMI boards, dead batteries, or app shutdowns brick unit |
 
 ---
 
-## 🔬 Section 2: Sub-£50 USB DAC Silicon Shootout (`Piccolo [AX]` Front-Ends)
+## Section 2: Sub-£50 USB DAC Silicon Shootout (`Piccolo [AX]` Front-Ends)
 
 Desktop Class-D speaker amplifiers are calibrated around a **2.0 Vrms** single-ended input into `10 kΩ – 47 kΩ`. EU voltage regulations throttle the UK Apple USB-C dongle (`A2155`) to `0.5 Vrms` (`~8 mW @ 32 Ω`) and cap sample rates at `24-bit/48 kHz`—forcing studio masters through resampling and starving Class-D input stages for gain.
 
@@ -57,35 +66,35 @@ Desktop Class-D speaker amplifiers are calibrated around a **2.0 Vrms** single-e
  ├── RamFilePreloader (Locks FLAC / .dsf / .dff / tracker modules into RAM)
  ├── MpkMini3Listener (Lock-free SPSC MIDI queue -> Cores 2–4 Synth/FX DSP)
  └── Intel iHD VA-API / MS2130S Capture (Zero-copy dma_buf -> Core 1 GPU Presentation)
-  |
-  v (Canonical StereoSampleRing + ScopedDacLock /run/lock/ax-dac.lock Arbitration)
+        |
+        v (Canonical StereoSampleRing + ScopedDacLock /run/lock/ax-dac.lock Arbitration)
 [ CORE 0 (0x01): isolcpus + SCHED_FIFO Prio 80 + USB xHCI IRQ Affinity ]
  └── Direct ALSA hw:CARD=FC3,DEV=0 (or BLACKPEARL) / AlsaStereoSink (Bypasses PipeWire/PulseAudio/dmix)
-  |
-  | USB 2.0 High-Speed (Raw S32_LE PCM up to 384 kHz or DoP DSD128/DSD256)
-  v
-+-------------------------------------------------------------------+
-| HIBY FC3 (ES9281AC PRO) OR TRN BLACK PEARL (2x CS43131)          |
-| [Single-Die USB PHY + QUAD DAC] [CB5100 + Dual-Mono DACs]        |
-| [Optional 0.69" OLED Telemetry] [On-Board 8/10-Band PEQ]          |
-| [2.0 Vrms SE / 112 mW @ 32 Ohm] [2.0 Vrms SE / 4.0 Vrms Bal]     |
-+-------------------------------------------------------------------+
-  |                               |
-  | (3.5 mm -> RCA / AUX Interconnect) | (Direct 3.5 mm / 4.4 mm Out)
-  v                               v
+        |
+        | USB 2.0 High-Speed (Raw S32_LE PCM up to 384 kHz or DoP DSD128/DSD256)
+        v
++-----------------------------------+   +-----------------------------------+
+| HIBY FC3 (ES9281AC PRO)           |   | TRN BLACK PEARL (2x CS43131)      |
+| [Single-Die USB PHY + QUAD DAC]   |   | [CB5100 + Dual-Mono DACs]         |
+| [Optional 0.69" OLED Telemetry]   |   | [On-Board 8/10-Band PEQ]          |
+| [2.0 Vrms SE / 112 mW @ 32 Ohm]   |   | [2.0 Vrms SE / 4.0 Vrms Bal]      |
++-----------------------------------+   +-----------------------------------+
+        |                                         |
+        | (3.5 mm -> RCA / AUX Interconnect)      | (Direct 3.5 mm / 4.4 mm Out)
+        v                                         v
 [ NOBSOUND Q10 CLASS-D AMP ] -> [ DIAMOND 9.0 ] [ GRADO SR325x / IEMs ]
 ```
 
 ### 2.1 Silicon Architecture & Circuit Topology (Sub-£50 Contenders)
 
-* 🎛️ **HiBy FC3 (`£29.67` Standard / `£35` OLED Display — `VID 0x32BB` Reference Target):** Consolidates USB 2.0 PHY, 32-bit HyperStream II QUAD DAC, and analogue output stage onto a **single piece of ESS Sabre `ES9281AC Pro` silicon**—eliminating external USB-to-I²S bridges and inter-chip jitter domains. Outputs `2.0 Vrms` (`112 mW @ 32 Ω`) SE with `< 1.0 Ω` output impedance, `+130 dB` SNR, native `32-bit/384 kHz` PCM, DoP DSD128, MQA rendering, physical volume buttons, and detachable USB-C cable.  
-* 🐙 **TRN Black Pearl (`£29.18` — Dual-Mono Value & Hardware PEQ):** Deploys **two separate Cirrus Logic `CS43131` DACs** in a true dual-mono configuration behind a `CB5100` USB bridge—dedicating one MasterHIFI converter per stereo channel. Delivers `2.0 Vrms` (`125 mW @ 32 Ω`) from 3.5mm SE and `4.0 Vrms` (`320 mW @ 32 Ω`) from 4.4mm Pentaconn balanced. Crucially integrates an **8- to 10-band hardware parametric EQ (PEQ)** stored directly in on-board flash (configured via Walk Play web/app), physical volume/playback buttons, a detachable USB-C cable, and a **TRRS headset microphone ADC**.  
-* ⚡ **FiiO KA11 (`£29.19` — Single-Ended Brute-Force Powerhouse):** Pairs a Cirrus Logic `CS43131` with an independent **`SGM8262` high-current operational amplifier**, swinging **`2.5 Vrms` (`200 mW @ 32 Ω`, `245 mW @ 16 Ω`)** out of a standard 3.5mm jack with `< 0.5 Ω` output impedance. Trade-offs: fixed braided copper lead, no physical volume buttons, higher thermal draw, and `+2 dB` hotter line output requiring lower `--volume` gain (`0.70–0.75`) into TPA3116 speaker amps.  
-* 💎 **Moondrop Dawn Pro 2 (`£49.79` — Micro-Linearity IEM Specialist):** Steps up to **dual standalone Cirrus Logic `CS43198` DACs** plus external dual-channel op-amps (`THD+N < 0.00014%`, `132 dB` dynamic range), `2.0 Vrms` (`~60 mW @ 32 Ω`) SE / `4.0 Vrms` (`~120 mW @ 32 Ω`) balanced, 100-step hardware volume control, and 8-band hardware PEQ. Ideal for ultra-sensitive IEMs, though its £20 premium yields diminishing returns on high-impedance (`10–47 kΩ`) Class-D speaker inputs.
+* **HiBy FC3 (`£29.67` Standard / `£35` OLED Display — `VID 0x32BB` Reference Target):** Consolidates USB 2.0 PHY, 32-bit HyperStream II QUAD DAC, and analogue output stage onto a **single piece of ESS Sabre `ES9281AC Pro` silicon**—eliminating external USB-to-I²S bridges and inter-chip jitter domains. Outputs `2.0 Vrms` (`112 mW @ 32 Ω`) SE with `< 1.0 Ω` output impedance, `+130 dB` SNR, native `32-bit/384 kHz` PCM, DoP DSD128, MQA rendering, physical volume buttons, and detachable USB-C cable.  
+* **TRN Black Pearl (`£29.18` — Dual-Mono Value & Hardware PEQ):** Deploys **two separate Cirrus Logic `CS43131` DACs** in a true dual-mono configuration behind a `CB5100` USB bridge—dedicating one MasterHIFI converter per stereo channel. Delivers `2.0 Vrms` (`125 mW @ 32 Ω`) from 3.5mm SE and `4.0 Vrms` (`320 mW @ 32 Ω`) from 4.4mm Pentaconn balanced. Crucially integrates an **8- to 10-band hardware parametric EQ (PEQ)** stored directly in on-board flash (configured via Walk Play web/app), physical volume/playback buttons, a detachable USB-C cable, and a **TRRS headset microphone ADC**.  
+* **FiiO KA11 (`£29.19` — Single-Ended Brute-Force Powerhouse):** Pairs a Cirrus Logic `CS43131` with an independent **`SGM8262` high-current operational amplifier**, swinging **`2.5 Vrms` (`200 mW @ 32 Ω`, `245 mW @ 16 Ω`)** out of a standard 3.5mm jack with `< 0.5 Ω` output impedance. Trade-offs: fixed braided copper lead, no physical volume buttons, higher thermal draw, and `+2 dB` hotter line output requiring lower `--volume` gain (`0.70–0.75`) into TPA3116 speaker amps.  
+* **Moondrop Dawn Pro 2 (`£49.79` — Micro-Linearity IEM Specialist):** Steps up to **dual standalone Cirrus Logic `CS43198` DACs** plus external dual-channel op-amps (`THD+N < 0.00014%`, `132 dB` dynamic range), `2.0 Vrms` (`~60 mW @ 32 Ω`) SE / `4.0 Vrms` (`~120 mW @ 32 Ω`) balanced, 100-step hardware volume control, and 8-band hardware PEQ. Ideal for ultra-sensitive IEMs, though its £20 premium yields diminishing returns on high-impedance (`10–47 kΩ`) Class-D speaker inputs.
 
 ### 2.2 Complete USB Front-End Comparison Matrix
 
-| Specification | Generic `UC02` Clone (`VID 0x0000`) | 🍎 Apple Dongle (UK `A2155`) | 🎛️ HiBy FC3 (`VID 0x32BB`) | ⚡ FiiO KA11 | 🐙 TRN Black Pearl | 💎 Moondrop Dawn Pro 2 | 🎙️ Neat Bumblebee (Used 2-in-1) |
+| Specification | Generic `UC02` Clone (`VID 0x0000`) | Apple Dongle (UK `A2155`) | HiBy FC3 (`VID 0x32BB`) | FiiO KA11 | TRN Black Pearl | Moondrop Dawn Pro 2 | Neat Bumblebee (Used 2-in-1) |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
 | **UK Street Price** | `~£3 – £7` (Avoid) | **`~£9.00`** (New) | **`£29.67`** (`£35` OLED) | **`£29.19`** (New) | **`£29.18`** (New) | **`£49.79`** (Pre-Order) | **`~£25 – £50`** (Used) |
 | **DAC / Amp Silicon** | Unprogrammed C-Media/Jieli | `CS46L06` Single-Die | `ES9281AC Pro` Single-Die | `CS43131` \+ `SGM8262` | **Dual `CS43131` \+ `CB5100`** | Dual `CS43198` \+ Ext. Amp | `3S SSS1629` \+ 24/96 Codec |
@@ -101,24 +110,24 @@ Desktop Class-D speaker amplifiers are calibrated around a **2.0 Vrms** single-e
 
 ### 2.3 Front-End Buying Verdicts & Neat Bumblebee Speaker Rule
 
-* 🥇 **HiBy FC3 (£29.67 Standard / £35 OLED — Reference `[AX]` Plug-and-Play Target):** Zero-config `VID 0x32BB` native target (`hw:CARD=FC3,DEV=0`), single-die ESS Sabre precision, MQA rendering, physical volume buttons, and optional `0.69"` OLED telemetry confirming sample rate and DoP lock.  
-* 🏆 **TRN Black Pearl (£29.18 — Best Alternative & Hardware Room-EQ Winner):** Dual-mono `CS43131` architecture, `2.0 Vrms` Class-D line-out, `320 mW` 4.4mm balanced headphone power, **flash-stored hardware PEQ** (solving bare-metal room EQ and cinema dialogue lift without host DSP latency), physical buttons, detachable cable, and **TRRS headset mic support** for Windows dual-boot gaming.  
-* ⚡ **FiiO KA11 (£29.19 — Best Single-Ended 3.5mm Headphone Power):** Delivers `200 mW` through a standard 3.5mm jack. Cap `flac_ax --volume` at `0.70–0.75` when feeding TPA3116 speaker amps due to its hotter `2.5 Vrms` output.  
-* 💎 **Moondrop Dawn Pro 2 (£49.79 — Best for Ultra-Sensitive IEMs):** Dual `CS43198` purity and 100-step attenuation banish background hiss on low-impedance IEMs, though its £20 premium is largely inaudible on speaker rigs.  
-* 🎙️ **Neat Bumblebee (\~£25–£50 Used — Best 2-in-1 Desktop Condenser Mic \+ DAC):** Consolidates a studio cardioid condenser mic, shockmount, and 24-bit/96 kHz codec into one USB port. **Mandatory Speaker Safety Rule:** Because it has an always-live zero-latency analogue monitor tap with no mute button, keep the top switch on **NEUTRAL**, `HEADPHONE VOL` at **2 o'clock (\~70%)**, and **`MIC GAIN` turned fully counter-clockwise (0%)** during speaker playback to prevent acoustic feedback loops.  
-* 🍎 **Apple USB-C Adapter (£9 — Stopgap) vs. `UC02` Clones (Avoid):** Keep the genuine `VID 0x05AC` dongle only as an emergency backup; never buy unbranded **`UC02` (`VID_0000&PID_0000`)** clones, which inject USB whine and break `udev` matching.
+* **HiBy FC3 (£29.67 Standard / £35 OLED — Reference `[AX]` Plug-and-Play Target):** Zero-config `VID 0x32BB` native target (`hw:CARD=FC3,DEV=0`), single-die ESS Sabre precision, MQA rendering, physical volume buttons, and optional `0.69"` OLED telemetry confirming sample rate and DoP lock.  
+* **TRN Black Pearl (£29.18 — Best Alternative & Hardware Room-EQ Winner):** Dual-mono `CS43131` architecture, `2.0 Vrms` Class-D line-out, `320 mW` 4.4mm balanced headphone power, **flash-stored hardware PEQ** (solving bare-metal room EQ and cinema dialogue lift without host DSP latency), physical buttons, detachable cable, and **TRRS headset mic support** for Windows dual-boot gaming.  
+* **FiiO KA11 (£29.19 — Best Single-Ended 3.5mm Headphone Power):** Delivers `200 mW` through a standard 3.5mm jack. Cap `flac_ax --volume` at `0.70–0.75` when feeding TPA3116 speaker amps due to its hotter `2.5 Vrms` output.  
+* **Moondrop Dawn Pro 2 (£49.79 — Best for Ultra-Sensitive IEMs):** Dual `CS43198` purity and 100-step attenuation banish background hiss on low-impedance IEMs, though its £20 premium is largely inaudible on speaker rigs.  
+* **Neat Bumblebee (`~£25–£50` Used — Best 2-in-1 Desktop Condenser Mic \+ DAC):** Consolidates a studio cardioid condenser mic, shockmount, and 24-bit/96 kHz codec into one USB port. **Mandatory Speaker Safety Rule:** Because it has an always-live zero-latency analogue monitor tap with no mute button, keep the top switch on **NEUTRAL**, `HEADPHONE VOL` at **2 o'clock (`~70%`)**, and **`MIC GAIN` turned fully counter-clockwise (0%)** during speaker playback to prevent acoustic feedback loops.  
+* **Apple USB-C Adapter (£9 — Stopgap) vs. `UC02` Clones (Avoid):** Keep the genuine `VID 0x05AC` dongle only as an emergency backup; never buy unbranded **`UC02` (`VID_0000&PID_0000`)** clones, which inject USB whine and break `udev` matching.
 
 ---
 
-## ⚡ Section 3: Compact Class-D Amplifiers & Safe Power Supplies
+## Section 3: Compact Class-D Amplifiers & Safe Power Supplies
 
 Desktop Class-D amplifiers switch DC supply rails directly into the speaker load via an LC reconstruction filter—meaning **power supply quality directly determines bass punch, noise floor, and hardware safety**. Because `FLAC_AX` performs bit-perfect 32-bit volume scaling ahead of a full `2.0 Vrms` DAC, expensive £70–£130 integrated amplifiers are unnecessary; compact **£21–£35 `TI TPA3116` mini stereo amps** deliver transparent nearfield power without inflating system cost.
 
 ### 3.1 Compact Stereo Amplifier Selection & Safe Voltage Matching
 
-* 🏆 **Reference Desktop Amp — Nobsound Q10 (\~£30–£35, `TI TPA3116` Stereo):** Compact desktop Class-D stereo amplifier with clean `2.0 Vrms`\-compatible line inputs, tactile volume control, and gold-plated banana-plug speaker binding posts—delivering transparent `<1 ms` current amplification for the **Wharfedale Diamond 9.0** without wasting budget on unused Bluetooth/DSP circuits.  
-* 💸 **Entry Budget Amp — Nobsound NS-01G Pro (\~£21, `TI TPA3116` Stereo):** Ultra-compact (`78 × 70 × 38 mm`) `TPA3116` stereo mini-amp with 3.5 mm `AUX` line-in and banana-plug speaker terminals—ideal for ultra-tight desk footprints. *(Always verify you are ordering a 2-channel stereo model, not a mono subwoofer amp like the Douk NS-03G.)*  
-* 🔌 **Zero-Waste PSU Strategy (£0 – £18):** Both units accept `12V–24V DC` (`5.5 × 2.5 mm` centre-positive). Repurpose a **genuine 19V/4.74A (90W) or 20V/4.5A (90W) Dell, Lenovo, or HP laptop power brick** (`£0` from a spare drawer or `~£12` used with barrel adapter), or use a regulated **Mean Well `GST90A19` (`19V`) / `24V/4A` PSU (`~£18`)**—staying safely below the TPA3116's 26V ceiling and 25V smoothing capacitors.
+* **Reference Desktop Amp — Nobsound Q10 (`~£30–£35`, `TI TPA3116` Stereo):** Compact desktop Class-D stereo amplifier with clean `2.0 Vrms`\-compatible line inputs, tactile volume control, and gold-plated banana-plug speaker binding posts—delivering transparent `<1 ms` current amplification for the **Wharfedale Diamond 9.0** without wasting budget on unused Bluetooth/DSP circuits.  
+* **Entry Budget Amp — Nobsound NS-01G Pro (`~£21`, `TI TPA3116` Stereo):** Ultra-compact (`78 × 70 × 38 mm`) `TPA3116` stereo mini-amp with 3.5 mm `AUX` line-in and banana-plug speaker terminals—ideal for ultra-tight desk footprints. *(Always verify you are ordering a 2-channel stereo model, not a mono subwoofer amp like the Douk NS-03G.)*  
+* **Zero-Waste PSU Strategy (£0 – £18):** Both units accept `12V–24V DC` (`5.5 × 2.5 mm` centre-positive). Repurpose a **genuine 19V/4.74A (90W) or 20V/4.5A (90W) Dell, Lenovo, or HP laptop power brick** (`£0` from a spare drawer or `~£12` used with barrel adapter), or use a regulated **Mean Well `GST90A19` (`19V`) / `24V/4A` PSU (`~£18`)**—staying safely below the TPA3116's 26V ceiling and 25V smoothing capacitors.
 
 ### 3.2 Power Supply Buying Rules
 
@@ -130,52 +139,52 @@ Desktop Class-D amplifiers switch DC supply rails directly into the speaker load
 
 ---
 
-## 🔊 Section 4: Nearfield Loudspeakers (UK Market — Richer Sounds)
+## Section 4: Nearfield Loudspeakers (UK Market — Richer Sounds)
 
 Capping the passive loudspeaker lineup at **£149** keeps the focus on compact British and studio standmounts engineered specifically for **70–100 cm nearfield desk placement** without paying for oversized floorstanding/large-room cabinets.
 
-| Tier & Model | UK Price | Impedance / Sensitivity | Freq. Range & Size (`H×W×D`) | Port & Acoustic Design | Best Piccolo \[AX\] Pairing & Character |
+| Tier & Model | UK Price | Impedance / Sensitivity | Freq. Range & Size (`H×W×D`) | Port & Acoustic Design | Best Piccolo `[AX]` Pairing & Character |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| **1\. JBL Control One** *(Entry)* | **\~£99** | `4–8 Ω` / `89 dB` | `80 Hz – 20 kHz` `228 × 155 × 139 mm` | Front / Compact Studio (+ desk/wall brackets) | **Nobsound NS-01G Pro or Q10 (`19V`).** High `89 dB` efficiency; retro game SFX and synth leads jump out cleanly at low volume. |
-| **2\. Wharfedale Diamond 9.0** *(Reference)* | **\~£99** | `6 Ω` / `86 dB` | `60 Hz – 24 kHz` `236 × 145 × 165 mm` | **Front-firing bass reflex** | **Nobsound Q10 \+ HiBy FC3 (`[AX]` Reference).** Warm, smooth Kevlar midrange; front port allows placement flush against a shallow desk wall without bass boom. |
-| **3\. Q Acoustics 3010i** *(Higher)* | **\~£119** | `6 Ω` / `86 dB` | `65 Hz – 30 kHz` `253 × 150 × 252 mm` | Rear port (foam bungs included) | **Nobsound Q10 (`19V–24V`).** Narrow `150 mm` front baffle projects a wide, fatigue-free 3D desktop stereo stage. |
-| **4\. Wharfedale Diamond 220** *(Ceiling)* | **\~£149** | `8 Ω` (`4.1 Ω` min) / `86 dB` | `56 Hz – 20 kHz` `315 × 174 × 255 mm` | **Downward-firing slot port** | **Nobsound Q10 (`24V` PSU).** Vents through a calibrated plinth gap to eliminate rear-wall boom; true studio-grade acoustic neutrality. |
+| **1\. JBL Control One** *(Entry)* | **`~£99`** | `4–8 Ω` / `89 dB` | `80 Hz – 20 kHz` `228 × 155 × 139 mm` | Front / Compact Studio (+ desk/wall brackets) | **Nobsound NS-01G Pro or Q10 (`19V`).** High `89 dB` efficiency; retro game SFX and synth leads jump out cleanly at low volume. |
+| **2\. Wharfedale Diamond 9.0** *(Reference)* | **`~£99`** | `6 Ω` / `86 dB` | `60 Hz – 24 kHz` `236 × 145 × 165 mm` | **Front-firing bass reflex** | **Nobsound Q10 \+ HiBy FC3 (`[AX]` Reference).** Warm, smooth Kevlar midrange; front port allows placement flush against a shallow desk wall without bass boom. |
+| **3\. Q Acoustics 3010i** *(Higher)* | **`~£119`** | `6 Ω` / `86 dB` | `65 Hz – 30 kHz` `253 × 150 × 252 mm` | Rear port (foam bungs included) | **Nobsound Q10 (`19V–24V`).** Narrow `150 mm` front baffle projects a wide, fatigue-free 3D desktop stereo stage. |
+| **4\. Wharfedale Diamond 220** *(Ceiling)* | **`~£149`** | `8 Ω` (`4.1 Ω` min) / `86 dB` | `56 Hz – 20 kHz` `315 × 174 × 255 mm` | **Downward-firing slot port** | **Nobsound Q10 (`24V` PSU).** Vents through a calibrated plinth gap to eliminate rear-wall boom; true studio-grade acoustic neutrality. |
 
 ---
 
-## 🎧 Section 5: Wired Headphones & IEMs (`1.5–2.00 ms` Direct from HiBy FC3)
+## Section 5: Wired Headphones & IEMs (`1.5–2.00 ms` Direct from HiBy FC3)
 
 ### 5.1 Open-Back & Closed-Back Wired Headphones
 
 | Model | UK Price | Design & Weight | Impedance / Sensitivity | Music | Gaming | Movies | Sonic Signature & `FLAC_AX` Gain Note |
 | :---- | :---- | :---- | :---- | :---- | :---- | :---- | :---- |
-| **Koss Porta Pro** | **\~£39** | Open On-Ear (`60 g`) | `60 Ω` / `101 dB` | ★★★★☆ | ★★★☆☆ | ★★★☆☆ | Lightweight retro comfort; punchy warmth on any dongle. |
-| **Sennheiser HD400S** | **\~£59** | Closed Over-Ear (`217 g`) | `18 Ω` / `120 dB` | ★★★☆☆ | ★★★★☆ | ★★★★☆ | Budget closed-back bass warmth; set `--volume 0.25`. |
-| **Beyerdynamic DJ 300 Pro X** | **\~£85** | Closed On/Over-Ear (`315 g`) | `48 Ω` / `109 dB` | ★★★★☆ | ★★★★☆ | ★★★★★ | Visceral `5 Hz` sub-bass extension and `20 dB` passive isolation. |
-| **Austrian Audio Hi-X15 / Hi-X20** | **\~£89 / £129** | Closed Over-Ear (`255 g`) | `25 Ω` / `113 dB/V` | ★★★★☆ | **★★★★★** | ★★★★☆ | Fast, snappy closed-back monitoring; blocks room noise & supports TRRS boom mic on TRN Black Pearl. |
-| **Sennheiser HD 560S** | **\~£99 – £139** | Open Over-Ear (`240 g`) | `120 Ω` / `110 dB/V` | **★★★★★** | **★★★★★** | ★★★★☆ | Angled transducers, flat studio accuracy & wide stage; HiBy FC3's `2.0 Vrms` drives `120 Ω` cleanly (`--volume 0.65–0.80`). |
-| **Sennheiser HD 569** | **\~£119 – £149** | Closed Over-Ear | `23 Ω` / `115 dB/V` | ★★★★☆ | **★★★★★** | ★★★★★ | Deep sub-bass extension, plush velour comfort, and inline mic compatibility with TRN Black Pearl. |
-| **Grado SR325x** *(Reference Head-Fi)* | **£299** | Open On-Ear (Alloy, `280 g`) | `38 Ω` / `98–99.8 dB` | **★★★★★** | ★★★★☆ | ★★★☆☆ | **Reference Open-Back Partner.** CNC-machined aluminium cups; explosive transient snap & flagship DSD detail straight out of HiBy FC3 (`--volume 0.50–0.65`). |
+| **Koss Porta Pro** | **`~£39`** | Open On-Ear (`60 g`) | `60 Ω` / `101 dB` | ★★★★☆ | ★★★☆☆ | ★★★☆☆ | Lightweight retro comfort; punchy warmth on any dongle. |
+| **Sennheiser HD400S** | **`~£59`** | Closed Over-Ear (`217 g`) | `18 Ω` / `120 dB` | ★★★☆☆ | ★★★★☆ | ★★★★☆ | Budget closed-back bass warmth; set `--volume 0.25`. |
+| **Beyerdynamic DJ 300 Pro X** | **`~£85`** | Closed On/Over-Ear (`315 g`) | `48 Ω` / `109 dB` | ★★★★☆ | ★★★★☆ | ★★★★★ | Visceral `5 Hz` sub-bass extension and `20 dB` passive isolation. |
+| **Austrian Audio Hi-X15 / Hi-X20** | **`~£89 / £129`** | Closed Over-Ear (`255 g`) | `25 Ω` / `113 dB/V` | ★★★★☆ | **★★★★★** | ★★★★☆ | Fast, snappy closed-back monitoring; blocks room noise & supports TRRS boom mic on TRN Black Pearl. |
+| **Sennheiser HD 560S** | **`~£99 – £139`** | Open Over-Ear (`240 g`) | `120 Ω` / `110 dB/V` | **★★★★★** | **★★★★★** | ★★★★☆ | Angled transducers, flat studio accuracy & wide stage; HiBy FC3's `2.0 Vrms` drives `120 Ω` cleanly (`--volume 0.65–0.80`). |
+| **Sennheiser HD 569** | **`~£119 – £149`** | Closed Over-Ear | `23 Ω` / `115 dB/V` | ★★★★☆ | **★★★★★** | ★★★★★ | Deep sub-bass extension, plush velour comfort, and inline mic compatibility with TRN Black Pearl. |
+| **Grado SR325x** *(Reference Head-Fi)* | **`£299`** | Open On-Ear (Alloy, `280 g`) | `38 Ω` / `98–99.8 dB` | **★★★★★** | ★★★★☆ | ★★★☆☆ | **Reference Open-Back Partner.** CNC-machined aluminium cups; explosive transient snap & flagship DSD detail straight out of HiBy FC3 (`--volume 0.50–0.65`). |
 
 ### 5.2 In-Ear Monitors (IEMs — `-26 dB` Passive Isolation & 2-in-1 USB-C DSP Options)
 
-> ⚠️ **Crucial `FLAC_AX` Gain Rule:** When plugging `16–32 Ω` IEMs into `hw:CARD=FC3` or `BLACKPEARL`, buy the **`3.5 mm`** cable version and drop volume to **`--volume 0.20–0.25`** before playback (or use the **Moondrop Dawn Pro 2**'s 100-step hardware attenuation for zero background hiss). Choose the **`USB-C DSP`** editions for standalone 2-in-1 use on phones/PCs without a separate dongle.
+> **Crucial `FLAC_AX` Gain Rule:** When plugging `16–32 Ω` IEMs into `hw:CARD=FC3` or `BLACKPEARL`, buy the **`3.5 mm`** cable version and drop volume to **`--volume 0.20–0.25`** before playback (or use the **Moondrop Dawn Pro 2**'s 100-step hardware attenuation for zero background hiss). Choose the **`USB-C DSP`** editions for standalone 2-in-1 use on phones/PCs without a separate dongle.
 
 | Category & Model | UK Price | Driver Topology | Impedance / Sensitivity | Built-In USB-C DAC? | Best Use Case |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| **Under £30: Moondrop Chu II / DSP** | **\~£16 – £24** | `1×` Al-Mg Dynamic (`6.4 g/ear`) | `18 Ω` / `119 dB/V` | **Yes (`Chu II DSP 24/96`)** | Sub-£25 metal-shell 2-in-1 all-rounder (`3.5mm` for DACs). |
-| **Under £30: 7Hz × Crinacle Zero:2** | **\~£22 – £25** | `1×` PU+Metal Dynamic | `32 Ω` / `108 dB/V` | **Optional USB-C DAC version** | Sub-£25 `+3 dB` warm sub-bass, gaming & movie immersion. |
-| **Over £30: Moondrop May** | **\~£65 – £75** | **`1DD + 1 Planar` Hybrid** | `30 Ω` / `120 dB/V` | **Yes (`FreeDSP 24/96` \+ 5-band PEQ)** | Flagship 2-in-1 USB-C DAC \+ planar hybrid (swappable `0.78 mm` 2-pin). |
-| **Over £30: Truthear Hexa** | **\~£75 – £85** | **`1DD + 3BA` Hybrid** | `20.5 Ω` / `120 dB/V` | Optional (`0.78 mm` 2-pin cable) | Neutral 3-way studio reference & competitive FPS gaming. |
+| **Under £30: Moondrop Chu II / DSP** | **`~£16 – £24`** | `1×` Al-Mg Dynamic (`6.4 g/ear`) | `18 Ω` / `119 dB/V` | **Yes (`Chu II DSP 24/96`)** | Sub-£25 metal-shell 2-in-1 all-rounder (`3.5mm` for DACs). |
+| **Under £30: 7Hz × Crinacle Zero:2** | **`~£22 – £25`** | `1×` PU+Metal Dynamic | `32 Ω` / `108 dB/V` | **Optional USB-C DAC version** | Sub-£25 `+3 dB` warm sub-bass, gaming & movie immersion. |
+| **Over £30: Moondrop May** | **`~£65 – £75`** | **`1DD + 1 Planar` Hybrid** | `30 Ω` / `120 dB/V` | **Yes (`FreeDSP 24/96` \+ 5-band PEQ)** | Flagship 2-in-1 USB-C DAC \+ planar hybrid (swappable `0.78 mm` 2-pin). |
+| **Over £30: Truthear Hexa** | **`~£75 – £85`** | **`1DD + 3BA` Hybrid** | `20.5 Ω` / `120 dB/V` | Optional (`0.78 mm` 2-pin cable) | Neutral 3-way studio reference & competitive FPS gaming. |
 
 ---
 
-## 📐 Section 6: Physical Acoustics, Pre-Terminated Cabling & Gain Staging
+## Section 6: Physical Acoustics, Pre-Terminated Cabling & Gain Staging
 
 ### 6.1 Nearfield Desk Geometry & Bare-Metal Hardware PEQ
 
 1. **Equilateral Triangle & Toe-In:** Space left and right tweeters `70–100 cm` apart matching the distance to your ears, angled inward (`toe-in`) by `15°–20°`.  
-2. **Acoustic Isolation Pads (\~£12):** Raise tweeters to ear height on angled foam isolation pads to prevent `150–400 Hz` desk-bounce chestiness and cabinet vibration transfer.  
+2. **Acoustic Isolation Pads (`~£12`):** Raise tweeters to ear height on angled foam isolation pads to prevent `150–400 Hz` desk-bounce chestiness and cabinet vibration transfer.  
 3. **Rear-Wall Boundary Control:** Leave `15–25 cm` behind rear-ported speakers (**Q Acoustics 3010i**) or insert the included **foam port bungs**—or use the front-ported **Wharfedale Diamond 9.0** / downward-ported **Diamond 220**, which sit cleanly near a back wall without bass boom.  
 4. **Solving the Bare-Metal Room-EQ Paradox (TRN Black Pearl Hardware PEQ):** Because bare-metal `flac_ax` bypasses all host-side software DSP to preserve bit-exact `S32_LE`/DoP delivery, DACs without on-board DSP (like the HiBy FC3) rely strictly on physical placement. With the **TRN Black Pearl**, you can save subtractive parametric EQ directly into the DAC's on-board flash via a web browser (`-2.5` to `-4.0 dB` at `100–140 Hz`, `Q=2.0` for rear-wall boom; `-2.0` to `-3.0 dB` at `220–320 Hz`, `Q=2.5` for desk bounce; or a `+2 dB` `2.5–3.5 kHz` vocal lift for cinema)—retaining bit-perfect host transport with **zero software DSP latency**.
 
@@ -198,21 +207,21 @@ Instead of stripping raw wire and crimping separate plugs, use a ready-terminate
 
 ---
 
-## 🛠️ Section 7: Complete Tiered System Blueprints (Built Around the `[AX]` Reference Rig)
+## Section 7: Complete Tiered System Blueprints (Built Around the `[AX]` Reference Rig)
 
 The table below anchors the entire ecosystem around **Tier 2 (The `[AX]` Reference Rig)**—pairing the **HiBy FC3**, **Nobsound Q10**, **Wharfedale Diamond 9.0**, and **Grado SR325x**—with streamlined lower and higher tiers:
 
 | System Tier & Role | USB Front-End (`Piccolo [AX]`) | Class-D Amp & PSU | Speakers & Personal Audio | Cabling & Isolation | Approx. Total |
 | :---- | :---- | :---- | :---- | :---- | :---- |
-| **Tier 0: Sub-£50 IEM Starter** *(Lowest)* | **HiBy FC3** (`£29.67`) *or* **TRN Black Pearl** (`£29.18`) | *None (Direct from DAC)* | **Moondrop Chu II (`3.5mm`)** (`£16–£19`) | *Included* | **\~£45 – £49** |
-| **Tier 1: Entry Speaker Rig** *(Lower)* | **HiBy FC3** (`£29.67`) *or* **TRN Black Pearl** (`£29.18`) | **Nobsound NS-01G Pro** (`~£21`) \+ repurposed 19V Laptop PSU (`£0–£12`) | **JBL Control One** (`~£99`, `89 dB` efficiency) *or* **Wharfedale Diamond 9.0** (`~£99`) | `£6.45` Speaker Cable | **\~£156 – £168** |
-| **Tier 2: `[AX]` Reference Rig** *(Baseline Anchor)* | **HiBy FC3 (`VID 0x32BB`)** (`£29.67–£35`) | **Nobsound Q10** (`~£30–£35`) \+ 19V–20V Laptop PSU (`£0–£12`) | **Wharfedale Diamond 9.0** (`~£99`) \+ **Grado SR325x** (`£299`) | `£6.45` Speaker Cable | **\~£165 – £188** *(Speakers)* / **\~£464 – £487** *(Full)* |
-| **Tier 3: Wide-Stage Nearfield** *(Higher)* | **HiBy FC3 OLED** (`£35`) *or* **TRN Black Pearl** (`£29.18`, on-board PEQ) | **Nobsound Q10** (`~£30–£35`) \+ 19V–20V Laptop PSU (`£12`) | **Q Acoustics 3010i** (`~£119`, narrow `150 mm` baffle \+ port bungs) \+ **Sennheiser HD 560S** (`£99`) | `£6.45` Speaker Cable \+ Foam Pads (`£12`) | **\~£297 – £308** |
-| **Tier 4: Studio Reference Ceiling** *(Highest)* | **HiBy FC3 OLED** (`£35`) *or* **TRN Black Pearl** (`£29.18`) | **Nobsound Q10** (`~£30–£35`) \+ regulated `24V/4A` PSU (`~£18`) | **Wharfedale Diamond 220** (`~£149`, downward slot port) \+ **Grado SR325x** (`£299`) | `£6.45` Speaker Cable \+ Foam Pads (`£12`) | **\~£543 – £554** *(or **\~£244 – £255** speakers-only)* |
+| **Tier 0: Sub-£50 IEM Starter** *(Lowest)* | **HiBy FC3** (`£29.67`) *or* **TRN Black Pearl** (`£29.18`) | *None (Direct from DAC)* | **Moondrop Chu II (`3.5mm`)** (`£16–£19`) | *Included* | **`~£45 – £49`** |
+| **Tier 1: Entry Speaker Rig** *(Lower)* | **HiBy FC3** (`£29.67`) *or* **TRN Black Pearl** (`£29.18`) | **Nobsound NS-01G Pro** (`~£21`) \+ repurposed 19V Laptop PSU (`£0–£12`) | **JBL Control One** (`~£99`, `89 dB` efficiency) *or* **Wharfedale Diamond 9.0** (`~£99`) | `£6.45` Speaker Cable | **`~£156 – £168`** |
+| **Tier 2: `[AX]` Reference Rig** *(Baseline Anchor)* | **HiBy FC3 (`VID 0x32BB`)** (`£29.67–£35`) | **Nobsound Q10** (`~£30–£35`) \+ 19V–20V Laptop PSU (`£0–£12`) | **Wharfedale Diamond 9.0** (`~£99`) \+ **Grado SR325x** (`£299`) | `£6.45` Speaker Cable | **`~£165 – £188`** *(Speakers)* / **`~£464 – £487`** *(Full)* |
+| **Tier 3: Wide-Stage Nearfield** *(Higher)* | **HiBy FC3 OLED** (`£35`) *or* **TRN Black Pearl** (`£29.18`, on-board PEQ) | **Nobsound Q10** (`~£30–£35`) \+ 19V–20V Laptop PSU (`£12`) | **Q Acoustics 3010i** (`~£119`, narrow `150 mm` baffle \+ port bungs) \+ **Sennheiser HD 560S** (`£99`) | `£6.45` Speaker Cable \+ Foam Pads (`£12`) | **`~£297 – £308`** |
+| **Tier 4: Studio Reference Ceiling** *(Highest)* | **HiBy FC3 OLED** (`£35`) *or* **TRN Black Pearl** (`£29.18`) | **Nobsound Q10** (`~£30–£35`) \+ regulated `24V/4A` PSU (`~£18`) | **Wharfedale Diamond 220** (`~£149`, downward slot port) \+ **Grado SR325x** (`£299`) | `£6.45` Speaker Cable \+ Foam Pads (`£12`) | **`~£543 – £554`** *(or **`~£244 – £255`** speakers-only)* |
 
 ---
 
-## 🐧 Section 8: Universal Real-Time Linux (`6.12-rt` / Buildroot / Desktop) Setup
+## Section 8: Universal Real-Time Linux (`6.12-rt` / Buildroot / Desktop) Setup
 
 This hardened configuration works identically across **bare-metal Buildroot/Batocera (`Piccolo [AX]`)** and **desktop Linux (`Ubuntu/Kubuntu 24.04+` or `piccolo-ax-desktop`)**, supporting both the **HiBy FC3 (`VID 0x32BB`)** and **TRN Black Pearl** (plus other UAC 2.0 dongles).
 
@@ -242,8 +251,6 @@ ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", MODE="0660", GROUP="aud
 ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="05ac", MODE="0660", GROUP="audio", TEST=="power/control", ATTR{power/control}="on", TEST=="power/autosuspend", ATTR{power/autosuspend}="-1"
 ```
 
- 
-
 Remove any deprecated `nrpacks=1` modprobe file on `6.12+` kernels and configure PAM real-time limits in `/etc/security/limits.d/99-flac-ax.conf`:
 
 ```sh
@@ -256,8 +263,6 @@ sudo rm -f /etc/modprobe.d/hiby-fc3-ax.conf
 @audio - memlock unlimited
 @audio - nice -19
 ```
-
- 
 
 Apply and verify:
 
@@ -291,8 +296,6 @@ monitor.alsa.rules = [
   }
 ]
 ```
-
- 
 
 Restart and verify WirePlumber no longer holds the device:
 
@@ -440,7 +443,7 @@ ps -eLo pid,cls,rtprio,psr,comm | grep ax_av_studio
 
 ---
 
-## 💻 Section 9: Windows 10/11 Dual-Boot & Build Setup
+## Section 9: Windows 10/11 Dual-Boot & Build Setup
 
 1. **Disable Audio Enhancements:** Open *Sound Settings → Device Properties → Additional Device Properties → Enhancements* and check **Disable all enhancements** (plus disable Windows Sonic / Spatial Sound) to cut `~20–30 ms` of OS buffer delay.  
 2. **Match Sample Rate / Exclusive Bit-Exact Mode:** Set the default format under *Advanced* to **24-bit, 44100 Hz** (music) or **24-bit, 48000 Hz** (gaming/movies). For bit-perfect, bypass-mixer playback, use **ASIO** (`FlexASIO` in Exclusive mode targeting the HiBy FC3 `VID 0x32BB`) or **WASAPI Exclusive Mode** in Foobar2000 / MusicBee / `flac_ax` / `ax_clap_host`.  
@@ -466,4 +469,4 @@ wasapiAutoConvert = false
 suggestedLatencySeconds = 0.003
 ```
 
-*Verification:* Open the `FlexASIO` GUI or run `FlexASIOUtil`—confirm the active output reports `WASAPI Exclusive` at `32-bit` / `48000 Hz` (or negotiated native sample rate) with zero shared-mixer conversion.
+*Verification:* Open the `FlexASIO` GUI or run `FlexASIOUtil`—confirm the active output reports `WASAPI Exclusive` at `32-bit` / target sample rate without software conversion.
